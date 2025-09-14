@@ -216,17 +216,27 @@ def _setup_error_handlers(app):
 
 
 def _init_data_cache(app):
-    """Initialize product services with Cloud SQL PostgreSQL."""
-    # Initialize services
-    app.excel_data = {'products': [], 'prices': {}, 'loading': True, 'loaded': False, 'syncing': False}
+    """Initialize product services with PostgreSQL and load products from Excel."""
+    # Initialize loading state
+    app.loading_state = {
+        'loading': True,
+        'loaded': False,
+        'syncing': False,
+        'error': None,
+        'progress': 0,
+        'current_step': 'Initializing...',
+        'product_count': 0
+    }
     app.search_service = None
     app.database_service = None
     
     def init_database_services():
-        """Background thread function to initialize database services."""
+        """Background thread function to initialize database services and load products."""
         with app.app_context():
             try:
-                app.logger.info("Starting Cloud SQL database initialization...")
+                app.logger.info("Starting PostgreSQL database initialization...")
+                app.loading_state['current_step'] = 'Connecting to database...'
+                app.loading_state['progress'] = 25
                 
                 from app.services.database_service import DatabaseService
                 from app.services.search_service import SearchService
@@ -236,34 +246,69 @@ def _init_data_cache(app):
                 
                 if not app.database_service.is_available():
                     app.logger.error("Database service not available!")
-                    app.excel_data['loading'] = False
-                    app.excel_data['loaded'] = False
+                    app.loading_state['loading'] = False
+                    app.loading_state['loaded'] = False
+                    app.loading_state['error'] = 'Database connection failed'
                     return
+                
+                app.logger.info("Database connected successfully")
+                app.loading_state['current_step'] = 'Creating database tables...'
+                app.loading_state['progress'] = 40
                 
                 # Create tables if they don't exist
                 if not app.database_service.create_tables():
                     app.logger.error("Failed to create database tables!")
-                    app.excel_data['loading'] = False
-                    app.excel_data['loaded'] = False
+                    app.loading_state['loading'] = False
+                    app.loading_state['loaded'] = False
+                    app.loading_state['error'] = 'Failed to create database tables'
                     return
                 
-                # Check if database has products
-                product_count = app.database_service.get_products_count()
-                app.logger.info(f"Found {product_count} products in database")
+                app.logger.info("Database tables created/verified")
+                app.loading_state['current_step'] = 'Loading products from Excel files...'
+                app.loading_state['progress'] = 60
+                app.loading_state['syncing'] = True
                 
-                if product_count == 0:
-                    app.logger.info("No products in database, syncing from Excel in background...")
-                    app.excel_data['syncing'] = True
+                # Always load products from Excel files (updates existing, no duplicates)
+                from app.services.excel_loader import ExcelLoader
+                
+                try:
+                    excel_loader = ExcelLoader(app.config)
+                    excel_data = excel_loader.load_data()
                     
-                    # Load and sync Excel data to database in background
-                    from app.services.excel_loader import ExcelLoader
+                    app.logger.info(f"Excel data loaded: {len(excel_data.get('products', []))} products")
+                    app.loading_state['current_step'] = 'Saving products to database...'
+                    app.loading_state['progress'] = 80
                     
-                    try:
-                        excel_loader = ExcelLoader(app.config)
-                        excel_data = excel_loader.load_data()
-                        
-                        # Migrate products to database
-                        for product in excel_data.get('products', []):
+                    # Load/update products in database
+                    loaded_count = 0
+                    for product in excel_data.get('products', []):
+                        # Convert Product object to database format
+                        if hasattr(product, 'menora_id'):
+                            product_data = {
+                                'menora_id': product.menora_id,
+                                'name_hebrew': product.descriptions.hebrew if product.descriptions else '',
+                                'name_english': product.descriptions.english if product.descriptions else '',
+                                'description_hebrew': product.descriptions.hebrew if product.descriptions else '',
+                                'description_english': product.descriptions.english if product.descriptions else '',
+                                'price': product.pricing.price if product.pricing else 0,
+                                'category': product.category or '',
+                                'subcategory': product.subcategory or '',
+                                'specifications': {
+                                    'type': product.specifications.type if product.specifications else '',
+                                    'height': product.specifications.height if product.specifications else None,
+                                    'width': product.specifications.width if product.specifications else None,
+                                    'thickness': product.specifications.thickness if product.specifications else None,
+                                    'galvanization': product.specifications.galvanization if product.specifications else '',
+                                    'material': product.specifications.material if product.specifications else ''
+                                } if product.specifications else {},
+                                'dimensions': {},
+                                'weight': 0,
+                                'material': product.specifications.material if product.specifications else '',
+                                'coating': product.specifications.galvanization if product.specifications else '',
+                                'standard': ''
+                            }
+                        else:
+                            # Handle dict format
                             product_data = {
                                 'menora_id': product.get('menora_id', ''),
                                 'name_hebrew': product.get('name_hebrew', ''),
@@ -280,29 +325,47 @@ def _init_data_cache(app):
                                 'coating': product.get('coating', ''),
                                 'standard': product.get('standard', '')
                             }
-                            app.database_service.insert_product(product_data)
                         
-                        app.logger.info(f"Successfully synced {len(excel_data.get('products', []))} products to database")
-                        
-                    except Exception as sync_error:
-                        app.logger.error(f"Error syncing Excel to database: {str(sync_error)}")
-                    finally:
-                        app.excel_data['syncing'] = False
+                        if app.database_service.insert_product(product_data):
+                            loaded_count += 1
+                    
+                    app.logger.info(f"Successfully loaded {loaded_count} products to database")
+                    app.loading_state['product_count'] = loaded_count
+                    
+                except Exception as sync_error:
+                    app.logger.error(f"Error loading Excel to database: {str(sync_error)}")
+                    app.loading_state['error'] = f'Error loading products: {str(sync_error)}'
+                    app.loading_state['loading'] = False
+                    app.loading_state['loaded'] = False
+                    return
+                finally:
+                    app.loading_state['syncing'] = False
                 
-                # Service is ready
-                app.excel_data['loading'] = False
-                app.excel_data['loaded'] = True
+                app.loading_state['current_step'] = 'Initializing search service...'
+                app.loading_state['progress'] = 90
                 
                 # Initialize search service with database
-                app.search_service = SearchService(app.excel_data, database_service=app.database_service)
+                app.search_service = SearchService(database_service=app.database_service)
                 
-                app.logger.info(f"Database initialization complete: {app.database_service.get_products_count()} products ready")
+                # Initialize product service for API endpoints
+                from app.services.product_service import ProductService
+                app.product_service = ProductService(app.database_service)
+                
+                # Loading complete
+                app.loading_state['loading'] = False
+                app.loading_state['loaded'] = True
+                app.loading_state['current_step'] = 'Ready!'
+                app.loading_state['progress'] = 100
+                
+                final_count = app.database_service.get_products_count()
+                app.logger.info(f"Database initialization complete: {final_count} products ready")
                 
             except Exception as e:
                 app.logger.error(f"Database service initialization failed: {str(e)}")
-                app.excel_data['loading'] = False
-                app.excel_data['loaded'] = False
-                app.excel_data['syncing'] = False
+                app.loading_state['loading'] = False
+                app.loading_state['loaded'] = False
+                app.loading_state['syncing'] = False
+                app.loading_state['error'] = f'Initialization failed: {str(e)}'
     
     # Start background initialization
     import threading

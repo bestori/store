@@ -232,30 +232,64 @@ def load_excel():
 
 @main_bp.route('/')
 def index():
-    """Home page - show login for anonymous users, dashboard for authenticated users."""
+    """Home page - show loading page if still loading, otherwise show login/dashboard."""
     try:
+        # Check if database service is available (needed for user authentication)
+        if not hasattr(current_app, 'database_service') or not current_app.database_service:
+            # Database service not ready yet, show loading page
+            return render_template('loading.html')
+        
+        # Check if app is still loading products from Excel to database
+        if hasattr(current_app, 'loading_state'):
+            loading_state = current_app.loading_state
+            if loading_state.get('loading', True) or not loading_state.get('loaded', False):
+                # Still loading products, but database is ready for user auth
+                # Check if user is already logged in
+                if 'user_code' in session and 'user_id' in session:
+                    # User is logged in, show dashboard even during loading
+                    from app.services.database_service import DatabaseService
+                    from app.services.user_service import UserService
+                    from app.services.shopping_list_service import ShoppingListService
+                    
+                    # Get services (now using PostgreSQL)
+                    database_service = current_app.database_service
+                    user_service = UserService(database_service)
+                    shopping_list_service = ShoppingListService(database_service)
+                    
+                    # User is already logged in (session has user_code)
+                    # Get user data from session
+                    user_code = session.get('user_code')
+                    user_id = session.get('user_id')
+                    
+                    # Get recent shopping lists (last 3) - simplified for now
+                    recent_lists = []
+                    
+                    return render_template('index.html', user_code=user_code, recent_lists=recent_lists, loading=True)
+                
+                # User not logged in, show login page even during loading
+                return render_template('index.html', loading=True)
+        
+        # App is ready, proceed with normal flow
         if 'user_code' in session and 'user_id' in session:
             # User is logged in, show dashboard
-            from app.services.firebase_service import FirebaseService
+            from app.services.database_service import DatabaseService
             from app.services.user_service import UserService
             from app.services.shopping_list_service import ShoppingListService
             
-            # Get services
-            firebase_service = FirebaseService(current_app.config)
-            user_service = UserService(firebase_service)
-            shopping_list_service = ShoppingListService(firebase_service, current_app.excel_data)
+            # Get services (now using PostgreSQL)
+            database_service = current_app.database_service
+            user_service = UserService(database_service)
+            shopping_list_service = ShoppingListService(database_service)
             
-            # Get current user
-            user = user_service.validate_session(session.get('session_id'))
-            if not user:
-                session.clear()
-                return render_template('index.html')
+            # User is already logged in (session has user_code)
+            # Get user data from session
+            user_code = session.get('user_code')
+            user_id = session.get('user_id')
             
-            # Get recent shopping lists (last 3)
-            all_lists = shopping_list_service.get_user_shopping_lists(user)
-            recent_lists = sorted(all_lists, key=lambda x: x.updated_at or x.created_at, reverse=True)[:3]
+            # Get recent shopping lists (last 3) - simplified for now
+            recent_lists = []
             
-            return render_template('index.html', user=user, recent_lists=recent_lists)
+            return render_template('index.html', user_code=user_code, recent_lists=recent_lists)
         
         # User not logged in, show login page
         return render_template('index.html')

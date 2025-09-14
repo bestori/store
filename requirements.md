@@ -6,16 +6,18 @@
 Build a Python Flask web application that uses Excel files as a **read-only database** for cable tray product data, providing a searchable online catalog where users can create and save personalized HTML shopping lists.
 
 ### 1.2 Scope
-- Use Excel files as read-only data source (NO MODIFICATIONS, ONLY READING)
-- Provide bilingual search functionality (Hebrew/English)
+- Load Excel files into PostgreSQL database on application startup
+- Show loading state while products are being loaded from Excel to database
+- Provide bilingual search functionality (Hebrew/English) using PostgreSQL queries
 - Generate HTML shopping lists per user
 - User identification via unique login codes
 - Calculate pricing and totals for shopping lists
-- Store user shopping lists in Firebase Firestore
+- Store all data (products, users, shopping lists) in PostgreSQL database
+- Update existing products without creating duplicates
 
 ## 2. Functional Requirements
 
-### 2.1 Excel File Processing (Read-Only Database)
+### 2.1 Excel File Processing (Startup Database Population)
 
 #### 2.1.1 Shopping List File ("New shopping list") - Master Database
 **File Structure:**
@@ -26,10 +28,12 @@ Build a Python Flask web application that uses Excel files as a **read-only data
   - Hebrew description
 
 **Processing Requirements:**
-- **READ-ONLY ACCESS**: Parse and load data into memory for searches (NO FILE MODIFICATIONS)
+- **STARTUP LOADING**: Parse Excel data and load into PostgreSQL database on app startup
+- **LOADING STATE**: Show loading screen while products are being loaded from Excel to database
+- **NO DUPLICATES**: Update existing products with new data, don't create duplicates
 - Map supplier codes to product descriptions for search results
 - Handle bilingual content (Hebrew/English) 
-- Cache data in application memory for fast access
+- Store all data in PostgreSQL for fast database queries
 
 #### 2.1.2 Price Table File ("Vered Price Table") - Pricing Database
 **File Structure:**
@@ -39,8 +43,10 @@ Build a Python Flask web application that uses Excel files as a **read-only data
 - Maps to complete lookup table for full product information
 
 **Processing Requirements:**
-- **READ-ONLY ACCESS**: Load pricing data into memory (NO FILE MODIFICATIONS)
-- Categorize by tray height for efficient lookup
+- **STARTUP LOADING**: Load pricing data into PostgreSQL database on app startup
+- **LOADING STATE**: Show loading screen while pricing data is being loaded
+- **NO DUPLICATES**: Update existing products with new pricing, don't create duplicates
+- Categorize by tray height for efficient database queries
 - Link to master lookup table for complete product details
 - Handle accessories and connectors separately in search results
 
@@ -104,24 +110,27 @@ Build a Python Flask web application that uses Excel files as a **read-only data
 - **No registration required**: Simple code-based access system
 - **Session management**: Track user sessions and shopping list access
 
-#### 2.4.2 Firebase Firestore Collections
+#### 2.4.2 PostgreSQL Database Tables
+- **products** - Product catalog loaded from Excel files
 - **shopping_lists** - User shopping lists with items and calculations
 - **users** - User codes and basic information
 - **user_sessions** - Active user sessions
 - **search_logs** - Search analytics (optional)
 
 #### 2.4.3 Excel Data Handling
-- **Read-only access**: Excel files are never modified by the application
-- **In-memory caching**: Load Excel data into application memory for fast searches
-- **Periodic refresh**: Reload Excel data if files are updated (manual trigger)
+- **Startup loading**: Excel files are read and loaded into PostgreSQL on app startup
+- **Loading state**: Application shows loading screen until all products are loaded
+- **Database storage**: All data stored in PostgreSQL for fast queries
+- **Update strategy**: Existing products updated with new data, no duplicates created
 
 ## 3. Non-Functional Requirements
 
 ### 3.1 Performance
-- Search response time < 2 seconds
-- Excel file processing < 30 seconds for typical files
-- Support up to 10,000 products
+- Search response time < 2 seconds (using PostgreSQL queries)
+- Excel file processing and database loading < 30 seconds for typical files
+- Support up to 10,000 products (stored in PostgreSQL)
 - Concurrent user support (up to 50 users)
+- Loading state must be shown until all products are loaded from Excel to database
 
 ### 3.2 Usability
 - Responsive design (mobile-friendly)
@@ -173,10 +182,11 @@ Build a Python Flask web application that uses Excel files as a **read-only data
 
 ### 5.1 Technology Stack
 - **Backend**: Python Flask
-- **Database**: Firebase Firestore
+- **Database**: PostgreSQL
 - **Excel Processing**: pandas, openpyxl
+- **Database ORM**: SQLAlchemy
 - **Frontend**: HTML/CSS/JavaScript (Flask templates)
-- **Hosting**: Cloud platform (Firebase Hosting or similar)
+- **Hosting**: Cloud platform with PostgreSQL support
 
 ### 5.2 Data Formats
 - Excel files (.xlsx, .xls)
@@ -186,11 +196,11 @@ Build a Python Flask web application that uses Excel files as a **read-only data
 
 ## 6. Integration Requirements
 
-### 6.1 Firebase Integration
-- Authentication (if required)
-- Firestore database operations
-- Cloud Storage for file uploads
-- Analytics tracking
+### 6.1 PostgreSQL Integration
+- Database connection and connection pooling
+- SQLAlchemy ORM for database operations
+- Database migrations and schema management
+- Connection health monitoring
 
 ### 6.2 External APIs
 - Currency conversion (if multi-currency support needed)
@@ -199,22 +209,26 @@ Build a Python Flask web application that uses Excel files as a **read-only data
 
 ## 7. Acceptance Criteria
 
-### 7.1 Excel Processing
+### 7.1 Excel Processing and Database Loading
 - ✅ Successfully parse both Excel file types
+- ✅ Load products from Excel into PostgreSQL database on startup
+- ✅ Show loading state while products are being loaded
+- ✅ Update existing products without creating duplicates
 - ✅ Maintain data relationships between lookup and price tables
 - ✅ Handle Hebrew/English text correctly
 - ✅ Validate data integrity
 
 ### 7.2 Search Functionality
-- ✅ Free text search returns relevant results
+- ✅ Free text search returns relevant results (using PostgreSQL queries)
 - ✅ Dropdown search works with cascading filters
 - ✅ Results display all required columns
 - ✅ Quantity and price calculations are accurate
 
 ### 7.3 System Performance
-- ✅ Search completes within 2 seconds
+- ✅ Search completes within 2 seconds (using PostgreSQL)
 - ✅ Handles expected user load
-- ✅ Data persists correctly in Firestore
+- ✅ Data persists correctly in PostgreSQL database
+- ✅ Loading state is shown until all products are loaded
 - ✅ Interface is responsive and user-friendly
 
 ## 8. Future Enhancements

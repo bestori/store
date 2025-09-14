@@ -6,15 +6,20 @@ from dataclasses import dataclass, asdict
 from typing import Dict, List, Optional, Any
 from datetime import datetime, timezone
 import uuid
+import logging
+
+logger = logging.getLogger(__name__)
 
 
-@dataclass
 class UserStats:
     """User usage statistics."""
-    total_lists: int = 0
-    total_items: int = 0
-    last_login_at: Optional[datetime] = None
-    created_at: Optional[datetime] = None
+    def __init__(self, total_lists: int = 0, total_items: int = 0, 
+                 last_login_at: Optional[datetime] = None, 
+                 created_at: Optional[datetime] = None):
+        self.total_lists = total_lists
+        self.total_items = total_items
+        self.last_login_at = last_login_at
+        self.created_at = created_at
     
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary."""
@@ -201,53 +206,79 @@ class User:
         Returns:
             User instance
         """
-        # Parse datetime fields
-        created_at = None
-        if data.get('createdAt'):
-            created_at = datetime.fromisoformat(data['createdAt'].replace('Z', '+00:00'))
-        
-        updated_at = None
-        if data.get('updatedAt'):
-            updated_at = datetime.fromisoformat(data['updatedAt'].replace('Z', '+00:00'))
-        
-        session_expiry = None
-        if data.get('sessionExpiry'):
-            session_expiry = datetime.fromisoformat(data['sessionExpiry'].replace('Z', '+00:00'))
-        
-        # Parse stats
-        stats = None
-        if data.get('stats'):
-            stats_data = data['stats']
-            last_login = None
-            created = None
+        try:
+            # Parse datetime fields
+            created_at = None
+            if data.get('createdAt'):
+                created_at_value = data['createdAt']
+                if isinstance(created_at_value, str):
+                    created_at = datetime.fromisoformat(created_at_value.replace('Z', '+00:00'))
+                elif isinstance(created_at_value, datetime):
+                    created_at = created_at_value
             
-            if stats_data.get('lastLoginAt'):
-                last_login = datetime.fromisoformat(stats_data['lastLoginAt'].replace('Z', '+00:00'))
-            if stats_data.get('createdAt'):
-                created = datetime.fromisoformat(stats_data['createdAt'].replace('Z', '+00:00'))
+            updated_at = None
+            if data.get('updatedAt'):
+                updated_at_value = data['updatedAt']
+                if isinstance(updated_at_value, str):
+                    updated_at = datetime.fromisoformat(updated_at_value.replace('Z', '+00:00'))
+                elif isinstance(updated_at_value, datetime):
+                    updated_at = updated_at_value
             
-            stats = UserStats(
-                total_lists=stats_data.get('totalLists', 0),
-                total_items=stats_data.get('totalItems', 0),
-                last_login_at=last_login,
-                created_at=created
+            session_expiry = None
+            if data.get('sessionExpiry'):
+                session_expiry_value = data['sessionExpiry']
+                if isinstance(session_expiry_value, str):
+                    session_expiry = datetime.fromisoformat(session_expiry_value.replace('Z', '+00:00'))
+                elif isinstance(session_expiry_value, datetime):
+                    session_expiry = session_expiry_value
+            
+            # Parse preferences JSON if it's a string
+            preferences = data.get('preferences', {})
+            if isinstance(preferences, str):
+                import json
+                try:
+                    preferences = json.loads(preferences)
+                except json.JSONDecodeError:
+                    preferences = {}
+            
+            # Parse stats from preferences
+            stats = None
+            if preferences.get('stats'):
+                stats_data = preferences['stats']
+                last_login = None
+                created = None
+                
+                if stats_data.get('lastLoginAt'):
+                    last_login = datetime.fromisoformat(stats_data['lastLoginAt'].replace('Z', '+00:00'))
+                if stats_data.get('createdAt'):
+                    created = datetime.fromisoformat(stats_data['createdAt'].replace('Z', '+00:00'))
+                
+                logger.debug(f"Creating UserStats with data: {stats_data}")
+                stats = UserStats(
+                    total_lists=int(stats_data.get('totalLists', 0)),
+                    total_items=int(stats_data.get('totalItems', 0)),
+                    last_login_at=last_login,
+                    created_at=created
+                )
+            
+            return cls(
+                user_id=data.get('user_id', data.get('userId', '')),
+                user_code=data.get('user_code', data.get('userCode', '')),
+                display_name=data.get('displayName'),
+                preferred_language=preferences.get('preferredLanguage', 'hebrew'),
+                default_currency=preferences.get('defaultCurrency', 'ILS'),
+                active_lists=preferences.get('activeLists', []) if isinstance(preferences.get('activeLists'), list) else [],
+                default_list_id=preferences.get('defaultListId'),
+                stats=stats,
+                current_session=data.get('currentSession'),
+                session_expiry=session_expiry,
+                active=bool(data.get('active', True)),
+                created_at=created_at,
+                updated_at=updated_at
             )
-        
-        return cls(
-            user_id=data.get('userId', ''),
-            user_code=data.get('userCode', ''),
-            display_name=data.get('displayName'),
-            preferred_language=data.get('preferredLanguage', 'hebrew'),
-            default_currency=data.get('defaultCurrency', 'ILS'),
-            active_lists=data.get('activeLists', []),
-            default_list_id=data.get('defaultListId'),
-            stats=stats,
-            current_session=data.get('currentSession'),
-            session_expiry=session_expiry,
-            active=data.get('active', True),
-            created_at=created_at,
-            updated_at=updated_at
-        )
+        except Exception as e:
+            logger.error(f"Error creating User from data {data}: {str(e)}")
+            raise
     
     @classmethod
     def create_new_user(cls, user_code: str) -> 'User':

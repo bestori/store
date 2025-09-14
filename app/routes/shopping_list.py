@@ -6,7 +6,7 @@ import logging
 from flask import Blueprint, render_template, request, jsonify, current_app, session, make_response, redirect, url_for
 from datetime import datetime
 
-from app.services.firebase_service import FirebaseService
+from app.services.database_service import DatabaseService
 from app.services.shopping_list_service import ShoppingListService
 from app.services.user_service import UserService
 from app.services.html_generator import HtmlGenerator
@@ -19,9 +19,9 @@ logger = logging.getLogger(__name__)
 
 def get_services():
     """Get service instances."""
-    firebase_service = FirebaseService(current_app.config)
-    user_service = UserService(firebase_service)
-    shopping_list_service = ShoppingListService(firebase_service, current_app.excel_data)
+    database_service = current_app.database_service
+    user_service = UserService(database_service)
+    shopping_list_service = ShoppingListService(database_service)
     price_calculator = PriceCalculator()
     html_generator = HtmlGenerator(price_calculator)
     
@@ -140,6 +140,106 @@ def view_shopping_list(list_id):
         logger.error(f"Error viewing shopping list {list_id}: {str(e)}")
         return render_template('error.html', 
                              error_message="An error occurred loading the shopping list."), 500
+
+
+@shopping_list_bp.route('/add-item', methods=['POST'])
+@login_required
+def add_item_to_default_list():
+    """Add item to user's default shopping list."""
+    logger.info(f"=== ADD TO CART DEBUG START ===")
+    logger.info(f"Session data: {dict(session)}")
+    logger.info(f"Request headers: {dict(request.headers)}")
+    logger.info(f"Request data: {request.get_json()}")
+    
+    try:
+        user_service, shopping_list_service, _, _ = get_services()
+        logger.info(f"Services obtained successfully")
+        
+        # Get current user
+        session_id = session.get('session_id')
+        logger.info(f"Session ID from session: {session_id}")
+        
+        user = user_service.validate_session(session_id)
+        logger.info(f"User validation result: {user}")
+        
+        if not user:
+            logger.error(f"User validation failed - no user found for session_id: {session_id}")
+            return jsonify({'success': False, 'error': 'Not authenticated', 'debug': 'User validation failed'}), 401
+        
+        # Get or create default list
+        if not user.default_list_id:
+            # Create a default list
+            default_list = shopping_list_service.create_shopping_list(
+                user=user,
+                list_name="Default List",
+                description="Default shopping list"
+            )
+            if not default_list:
+                return jsonify({'success': False, 'error': 'Failed to create default list'}), 500
+            list_id = default_list.list_id
+        else:
+            list_id = user.default_list_id
+        
+        # Get shopping list
+        shopping_list = shopping_list_service.get_shopping_list(list_id, user)
+        if not shopping_list:
+            return jsonify({'success': False, 'error': 'Shopping list not found'}), 404
+        
+        # Get form data
+        menora_id = (request.json.get('menora_id') or '').strip()
+        quantity = request.json.get('quantity', 1)
+        notes = (request.json.get('notes') or '').strip() or None
+        
+        if not menora_id:
+            return jsonify({
+                'success': False,
+                'error': 'Product ID is required'
+            }), 400
+        
+        try:
+            quantity = int(quantity)
+            if quantity <= 0:
+                raise ValueError("Quantity must be positive")
+        except (ValueError, TypeError):
+            return jsonify({
+                'success': False,
+                'error': 'Invalid quantity'
+            }), 400
+        
+        # Add item to list
+        success = shopping_list_service.add_item_to_list(
+            shopping_list=shopping_list,
+            menora_id=menora_id,
+            quantity=quantity,
+            notes=notes
+        )
+        
+        if success:
+            logger.info(f"Item added successfully to shopping list")
+            # Get updated totals
+            totals = shopping_list_service.calculate_list_totals(shopping_list)
+            logger.info(f"Updated totals: {totals}")
+            logger.info(f"=== ADD TO CART DEBUG END - SUCCESS ===")
+            return jsonify({
+                'success': True,
+                'message': 'Item added to shopping list',
+                'totals': totals,
+                'redirect_url': '/shopping-list'
+            })
+        else:
+            logger.error(f"Failed to add item to shopping list")
+            logger.info(f"=== ADD TO CART DEBUG END - FAILURE ===")
+            return jsonify({
+                'success': False,
+                'error': 'Failed to add item to list'
+            }), 500
+        
+    except Exception as e:
+        logger.error(f"Error adding item to default list: {str(e)}")
+        return jsonify({
+            'success': False,
+            'error': 'An error occurred'
+        }), 500
 
 
 @shopping_list_bp.route('/<list_id>/add-item', methods=['POST'])
@@ -532,9 +632,10 @@ def add_item():
     try:
         user_service, shopping_list_service, _, _ = get_services()
         
-        # Get current user
-        user = user_service.validate_session(session.get('session_id'))
-        if not user:
+        # User is already authenticated by @login_required decorator
+        # Get user from session data
+        user_code = session.get('user_code')
+        if not user_code:
             return jsonify({'success': False, 'error': 'Not authenticated'}), 401
         
         # Get form data
@@ -559,7 +660,7 @@ def add_item():
             }), 400
         
         # Get or create default shopping list
-        shopping_list = shopping_list_service.get_or_create_default_list(user)
+        shopping_list = shopping_list_service.get_or_create_default_list(user_code)
         if not shopping_list:
             return jsonify({
                 'success': False,

@@ -92,11 +92,75 @@ Column E: Compatibility Notes
 Column F: Additional Info
 ```
 
-## 2. Firebase Firestore Data Models (User Data Only)
+## 2. PostgreSQL Database Models (All Application Data)
 
-### 2.1 Shopping Lists Collection (`shopping_lists`)
-```javascript
-shopping_lists/{listId}
+### 2.1 Products Table (`products`)
+```sql
+CREATE TABLE products (
+    id SERIAL PRIMARY KEY,
+    menora_id VARCHAR(255) UNIQUE NOT NULL,
+    name_hebrew VARCHAR(500),
+    name_english VARCHAR(500),
+    description_hebrew TEXT,
+    description_english TEXT,
+    price DECIMAL(10,2),
+    category VARCHAR(255),
+    subcategory VARCHAR(255),
+    specifications JSONB DEFAULT '{}',
+    dimensions JSONB DEFAULT '{}',
+    weight DECIMAL(10,3),
+    material VARCHAR(255),
+    coating VARCHAR(255),
+    standard VARCHAR(255),
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+```
+
+### 2.2 Shopping Lists Table (`shopping_lists`)
+```sql
+CREATE TABLE shopping_lists (
+    id SERIAL PRIMARY KEY,
+    list_id VARCHAR(255) UNIQUE NOT NULL,
+    user_id VARCHAR(255) NOT NULL,
+    name VARCHAR(500) NOT NULL,
+    status VARCHAR(50) DEFAULT 'active',
+    items JSONB DEFAULT '[]',
+    total_price DECIMAL(10,2) DEFAULT 0,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE CASCADE
+);
+```
+
+### 2.3 Users Table (`users`)
+```sql
+CREATE TABLE users (
+    id SERIAL PRIMARY KEY,
+    user_id VARCHAR(255) UNIQUE NOT NULL,
+    user_code VARCHAR(255) UNIQUE NOT NULL,
+    preferences JSONB DEFAULT '{}',
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    last_activity TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+```
+
+### 2.4 User Sessions Table (`user_sessions`)
+```sql
+CREATE TABLE user_sessions (
+    id SERIAL PRIMARY KEY,
+    session_id VARCHAR(255) UNIQUE NOT NULL,
+    user_id VARCHAR(255) NOT NULL,
+    expires_at TIMESTAMP WITH TIME ZONE NOT NULL,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    active BOOLEAN DEFAULT TRUE,
+    FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE CASCADE
+);
+```
+
+### 2.5 Shopping List Data Structure (JSONB in shopping_lists table)
+```json
 {
   // User Information
   userId: "user_ABC123",                  // User's unique login code

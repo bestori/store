@@ -1,25 +1,25 @@
 """
-Product service for Firestore-based product management.
+Product service for PostgreSQL-based product management.
 
-This service replaces the Excel-based product loading with Firestore queries,
-providing faster startup and real-time data access.
+This service provides product queries from PostgreSQL database,
+providing fast access to product data loaded from Excel files.
 """
 
 import logging
 from typing import Dict, List, Optional, Any, Tuple
 from datetime import datetime, timezone
+import json
 
 from app.models.product import Product, ProductDescriptions, ProductSpecifications, ProductPricing
-from app.services.firebase_service import FirebaseService
-from google.cloud.firestore_v1 import FieldFilter
+from app.services.database_service import DatabaseService
 
 
 class ProductService:
-    """Service for managing products in Firestore."""
+    """Service for managing products in PostgreSQL."""
     
-    def __init__(self, firebase_service: FirebaseService):
+    def __init__(self, database_service: DatabaseService):
         """Initialize the product service."""
-        self.firebase_service = firebase_service
+        self.database_service = database_service
         self.logger = logging.getLogger(__name__)
         self._products_cache: Dict[str, Product] = {}
         self._cache_timestamp: Optional[datetime] = None
@@ -27,27 +27,35 @@ class ProductService:
     
     def is_available(self) -> bool:
         """Check if the service is available."""
-        return self.firebase_service.is_available()
+        return self.database_service.is_available()
     
-    def _get_collection_ref(self):
-        """Get the products collection reference."""
-        if not self.firebase_service.is_available():
-            raise Exception("Firebase service not available")
-        return self.firebase_service._db.collection('products')
+    def _get_products_from_db(self, limit: int = 100) -> List[Dict[str, Any]]:
+        """Get products from PostgreSQL database."""
+        if not self.database_service.is_available():
+            raise Exception("Database service not available")
+        return self.database_service.execute_query(
+            "SELECT * FROM products ORDER BY name_hebrew LIMIT :limit",
+            {'limit': limit}
+        )
     
-    def _firestore_doc_to_product(self, doc_data: Dict[str, Any], doc_id: str) -> Product:
-        """Convert Firestore document to Product object."""
+    def _db_row_to_product(self, row_data: Dict[str, Any]) -> Product:
+        """Convert PostgreSQL row to Product object."""
         try:
             # Extract descriptions
-            descriptions_data = doc_data.get('descriptions', {})
             descriptions = ProductDescriptions(
-                hebrew=descriptions_data.get('hebrew', ''),
-                english=descriptions_data.get('english', '')
+                hebrew=row_data.get('name_hebrew', ''),
+                english=row_data.get('name_english', '')
             )
             
-            # Extract specifications
+            # Extract specifications from JSON field
             specifications = None
-            specs_data = doc_data.get('specifications', {})
+            specs_data = {}
+            if row_data.get('specifications'):
+                try:
+                    specs_data = json.loads(row_data['specifications'])
+                except (json.JSONDecodeError, TypeError):
+                    specs_data = {}
+            
             if specs_data:
                 specifications = ProductSpecifications(
                     type=specs_data.get('type', ''),
@@ -64,44 +72,44 @@ class ProductService:
             
             # Extract pricing
             pricing = None
-            pricing_data = doc_data.get('pricing')
-            if pricing_data:
+            price = row_data.get('price', 0.0)
+            if price and price > 0:
                 pricing = ProductPricing(
-                    price=pricing_data.get('price', 0.0),
-                    currency=pricing_data.get('currency', 'ILS'),
-                    bulk_pricing=pricing_data.get('bulk_pricing'),
-                    price_type=pricing_data.get('price_type', 'standard'),
-                    minimum_quantity=pricing_data.get('minimum_quantity', 1)
+                    price=float(price),
+                    currency='ILS',
+                    bulk_pricing=None,
+                    price_type='standard',
+                    minimum_quantity=1
                 )
             
             # Create product
             product = Product(
-                menora_id=doc_data.get('menora_id', doc_id),
-                supplier_code=doc_data.get('supplier_code', ''),
+                menora_id=row_data.get('menora_id', ''),
+                supplier_code=row_data.get('supplier_code', ''),
                 descriptions=descriptions,
-                category=doc_data.get('category', 'cable_tray'),
-                subcategory=doc_data.get('subcategory'),
+                category=row_data.get('category', 'cable_tray'),
+                subcategory=row_data.get('subcategory'),
                 specifications=specifications,
                 pricing=pricing,
-                search_terms=doc_data.get('search_terms', {}),
-                in_stock=doc_data.get('in_stock', True),
-                lead_time=doc_data.get('lead_time', 7),
-                tags=doc_data.get('tags', []),
-                supplier_name=doc_data.get('supplier_name', 'HOLDEE'),
-                image_url=doc_data.get('image_url'),
-                image_path=doc_data.get('image_path'),
-                has_image=doc_data.get('has_image', False)
+                search_terms={},
+                in_stock=True,
+                lead_time=7,
+                tags=[],
+                supplier_name='HOLDEE',
+                image_url=None,
+                image_path=None,
+                has_image=False
             )
             
             return product
             
         except Exception as e:
-            self.logger.error(f"Error converting Firestore doc to Product: {str(e)}")
+            self.logger.error(f"Error converting database row to Product: {str(e)}")
             raise
     
     def get_all_products(self, use_cache: bool = True) -> List[Product]:
         """
-        Get all products from Firestore.
+        Get all products from PostgreSQL database.
         
         Args:
             use_cache: Whether to use cached results
@@ -115,29 +123,28 @@ class ProductService:
             return list(self._products_cache.values())
         
         try:
-            collection_ref = self._get_collection_ref()
-            docs = collection_ref.stream()
+            rows = self._get_products_from_db(limit=10000)  # Get all products
             
             products = []
-            for doc in docs:
+            for row in rows:
                 try:
-                    product = self._firestore_doc_to_product(doc.to_dict(), doc.id)
+                    product = self._db_row_to_product(row)
                     products.append(product)
                     self._products_cache[product.menora_id] = product
                 except Exception as e:
-                    self.logger.error(f"Error processing product document {doc.id}: {str(e)}")
+                    self.logger.error(f"Error processing product row {row.get('id', 'unknown')}: {str(e)}")
                     continue
             
             self._cache_timestamp = datetime.now(timezone.utc)
-            self.logger.info(f"Loaded {len(products)} products from Firestore")
+            self.logger.info(f"Loaded {len(products)} products from PostgreSQL database")
             
             return products
             
         except Exception as e:
-            self.logger.error(f"Error loading products from Firestore: {str(e)}")
+            self.logger.error(f"Error loading products from PostgreSQL database: {str(e)}")
             # Return cached data if available
             if self._products_cache:
-                self.logger.warning("Returning cached products due to Firestore error")
+                self.logger.warning("Returning cached products due to database error")
                 return list(self._products_cache.values())
             return []
     
@@ -156,20 +163,21 @@ class ProductService:
             return self._products_cache[menora_id]
         
         try:
-            collection_ref = self._get_collection_ref()
-            doc_ref = collection_ref.document(menora_id)
-            doc = doc_ref.get()
+            results = self.database_service.execute_query(
+                "SELECT * FROM products WHERE menora_id = :menora_id",
+                {'menora_id': menora_id}
+            )
             
-            if not doc.exists:
+            if not results:
                 return None
             
-            product = self._firestore_doc_to_product(doc.to_dict(), doc.id)
+            product = self._db_row_to_product(results[0])
             self._products_cache[menora_id] = product
             
             return product
             
         except Exception as e:
-            self.logger.error(f"Error loading product {menora_id} from Firestore: {str(e)}")
+            self.logger.error(f"Error loading product {menora_id} from PostgreSQL database: {str(e)}")
             return None
     
     def search_products(self, query: str, language: Optional[str] = None, 
@@ -190,7 +198,7 @@ class ProductService:
         """
         try:
             # For now, get all products and filter in memory
-            # TODO: Implement proper Firestore full-text search when available
+            # TODO: Implement proper PostgreSQL full-text search when available
             all_products = self.get_all_products()
             
             # Apply text search
@@ -224,7 +232,7 @@ class ProductService:
     
     def get_products_by_category(self, category: str, limit: int = 100) -> List[Product]:
         """
-        Get products by category.
+        Get products by category from PostgreSQL.
         
         Args:
             category: Product category
@@ -234,20 +242,18 @@ class ProductService:
             List of Product objects
         """
         try:
-            collection_ref = self._get_collection_ref()
-            query = collection_ref.where(
-                filter=FieldFilter('category', '==', category)
-            ).limit(limit)
-            
-            docs = query.stream()
+            results = self.database_service.execute_query(
+                "SELECT * FROM products WHERE category = :category LIMIT :limit",
+                {'category': category, 'limit': limit}
+            )
             
             products = []
-            for doc in docs:
+            for row in results:
                 try:
-                    product = self._firestore_doc_to_product(doc.to_dict(), doc.id)
+                    product = self._db_row_to_product(row)
                     products.append(product)
                 except Exception as e:
-                    self.logger.error(f"Error processing product document {doc.id}: {str(e)}")
+                    self.logger.error(f"Error processing product row: {str(e)}")
                     continue
             
             return products
@@ -267,20 +273,18 @@ class ProductService:
             List of Product objects
         """
         try:
-            collection_ref = self._get_collection_ref()
-            query = collection_ref.where(
-                filter=FieldFilter('in_stock', '==', True)
-            ).limit(limit)
-            
-            docs = query.stream()
+            results = self.database_service.execute_query(
+                "SELECT * FROM products WHERE in_stock = true LIMIT :limit",
+                {'limit': limit}
+            )
             
             products = []
-            for doc in docs:
+            for row in results:
                 try:
-                    product = self._firestore_doc_to_product(doc.to_dict(), doc.id)
+                    product = self._db_row_to_product(row)
                     products.append(product)
                 except Exception as e:
-                    self.logger.error(f"Error processing product document {doc.id}: {str(e)}")
+                    self.logger.error(f"Error processing product row: {str(e)}")
                     continue
             
             return products
@@ -291,7 +295,7 @@ class ProductService:
     
     def create_product(self, product: Product) -> bool:
         """
-        Create a new product in Firestore.
+        Create a new product in PostgreSQL.
         
         Args:
             product: Product object to create
@@ -300,40 +304,30 @@ class ProductService:
             True if successful, False otherwise
         """
         try:
-            collection_ref = self._get_collection_ref()
-            doc_ref = collection_ref.document(product.menora_id)
-            
-            # Convert product to Firestore document format
-            doc_data = {
+            # Convert product to database format
+            product_data = {
                 'menora_id': product.menora_id,
-                'supplier_code': product.supplier_code,
-                'descriptions': {
-                    'hebrew': product.descriptions.hebrew if product.descriptions else '',
-                    'english': product.descriptions.english if product.descriptions else ''
-                },
+                'name_hebrew': product.descriptions.hebrew if product.descriptions else '',
+                'name_english': product.descriptions.english if product.descriptions else '',
+                'description_hebrew': product.descriptions.hebrew if product.descriptions else '',
+                'description_english': product.descriptions.english if product.descriptions else '',
+                'price': product.pricing.price if product.pricing else 0,
                 'category': product.category,
-                'subcategory': product.subcategory,
-                'specifications': product.specifications.to_dict() if product.specifications else {},
-                'pricing': product.pricing.to_dict() if product.pricing else None,
-                'search_terms': product.search_terms or {},
-                'in_stock': product.in_stock,
-                'lead_time': product.lead_time,
-                'tags': product.tags or [],
-                'supplier_name': product.supplier_name,
-                'image_url': product.image_url,
-                'image_path': product.image_path,
-                'has_image': product.has_image,
-                'created_at': datetime.now(timezone.utc),
-                'updated_at': datetime.now(timezone.utc)
+                'subcategory': product.subcategory or '',
+                'specifications': json.dumps(product.specifications.to_dict() if product.specifications else {}),
+                'dimensions': '{}',
+                'weight': product.specifications.weight if product.specifications and product.specifications.weight else 0,
+                'material': product.specifications.material if product.specifications and product.specifications.material else '',
+                'coating': product.specifications.finish if product.specifications and product.specifications.finish else '',
+                'standard': ''
             }
             
-            doc_ref.set(doc_data)
+            success = self.database_service.insert_product(product_data)
             
-            # Update cache
-            self._products_cache[product.menora_id] = product
+            if success:
+                self.logger.info(f"Created product {product.menora_id} in PostgreSQL")
             
-            self.logger.info(f"Created product {product.menora_id} in Firestore")
-            return True
+            return success
             
         except Exception as e:
             self.logger.error(f"Error creating product {product.menora_id}: {str(e)}")
@@ -341,7 +335,7 @@ class ProductService:
     
     def update_product(self, product: Product) -> bool:
         """
-        Update an existing product in Firestore.
+        Update an existing product in PostgreSQL.
         
         Args:
             product: Product object to update
@@ -350,44 +344,30 @@ class ProductService:
             True if successful, False otherwise
         """
         try:
-            collection_ref = self._get_collection_ref()
-            doc_ref = collection_ref.document(product.menora_id)
-            
-            # Check if document exists
-            if not doc_ref.get().exists:
-                self.logger.error(f"Product {product.menora_id} not found for update")
-                return False
-            
-            # Convert product to Firestore document format
-            doc_data = {
+            # Convert product to database format
+            product_data = {
                 'menora_id': product.menora_id,
-                'supplier_code': product.supplier_code,
-                'descriptions': {
-                    'hebrew': product.descriptions.hebrew if product.descriptions else '',
-                    'english': product.descriptions.english if product.descriptions else ''
-                },
+                'name_hebrew': product.descriptions.hebrew if product.descriptions else '',
+                'name_english': product.descriptions.english if product.descriptions else '',
+                'description_hebrew': product.descriptions.hebrew if product.descriptions else '',
+                'description_english': product.descriptions.english if product.descriptions else '',
+                'price': product.pricing.price if product.pricing else 0,
                 'category': product.category,
-                'subcategory': product.subcategory,
-                'specifications': product.specifications.to_dict() if product.specifications else {},
-                'pricing': product.pricing.to_dict() if product.pricing else None,
-                'search_terms': product.search_terms or {},
-                'in_stock': product.in_stock,
-                'lead_time': product.lead_time,
-                'tags': product.tags or [],
-                'supplier_name': product.supplier_name,
-                'image_url': product.image_url,
-                'image_path': product.image_path,
-                'has_image': product.has_image,
-                'updated_at': datetime.now(timezone.utc)
+                'subcategory': product.subcategory or '',
+                'specifications': json.dumps(product.specifications.to_dict() if product.specifications else {}),
+                'dimensions': '{}',
+                'weight': product.specifications.weight if product.specifications and product.specifications.weight else 0,
+                'material': product.specifications.material if product.specifications and product.specifications.material else '',
+                'coating': product.specifications.finish if product.specifications and product.specifications.finish else '',
+                'standard': ''
             }
             
-            doc_ref.update(doc_data)
+            success = self.database_service.insert_product(product_data)
             
-            # Update cache
-            self._products_cache[product.menora_id] = product
+            if success:
+                self.logger.info(f"Updated product {product.menora_id} in PostgreSQL")
             
-            self.logger.info(f"Updated product {product.menora_id} in Firestore")
-            return True
+            return success
             
         except Exception as e:
             self.logger.error(f"Error updating product {product.menora_id}: {str(e)}")
@@ -395,7 +375,7 @@ class ProductService:
     
     def delete_product(self, menora_id: str) -> bool:
         """
-        Delete a product from Firestore.
+        Delete a product from PostgreSQL.
         
         Args:
             menora_id: Product ID to delete
@@ -404,22 +384,15 @@ class ProductService:
             True if successful, False otherwise
         """
         try:
-            collection_ref = self._get_collection_ref()
-            doc_ref = collection_ref.document(menora_id)
+            success = self.database_service.execute_update(
+                "DELETE FROM products WHERE menora_id = :menora_id",
+                {'menora_id': menora_id}
+            )
             
-            # Check if document exists
-            if not doc_ref.get().exists:
-                self.logger.error(f"Product {menora_id} not found for deletion")
-                return False
+            if success:
+                self.logger.info(f"Deleted product {menora_id} from PostgreSQL")
             
-            doc_ref.delete()
-            
-            # Remove from cache
-            if menora_id in self._products_cache:
-                del self._products_cache[menora_id]
-            
-            self.logger.info(f"Deleted product {menora_id} from Firestore")
-            return True
+            return success
             
         except Exception as e:
             self.logger.error(f"Error deleting product {menora_id}: {str(e)}")
@@ -427,22 +400,14 @@ class ProductService:
     
     def get_product_count(self) -> int:
         """
-        Get total number of products.
+        Get total number of products from PostgreSQL.
         
         Returns:
             Total product count
         """
         try:
-            # Use cache if available
-            if self._products_cache and self._cache_timestamp:
-                return len(self._products_cache)
-            
-            # Count documents in collection
-            collection_ref = self._get_collection_ref()
-            docs = collection_ref.stream()
-            count = sum(1 for _ in docs)
-            
-            return count
+            result = self.database_service.execute_query("SELECT COUNT(*) as count FROM products")
+            return result[0]['count'] if result else 0
             
         except Exception as e:
             self.logger.error(f"Error getting product count: {str(e)}")

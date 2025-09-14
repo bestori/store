@@ -5,7 +5,7 @@ Authentication routes for user login/logout.
 import logging
 from flask import Blueprint, render_template, request, session, redirect, url_for, flash, jsonify, current_app
 
-from app.services.firebase_service import FirebaseService
+from app.services.database_service import DatabaseService
 from app.services.user_service import UserService
 from app.services.shopping_list_service import ShoppingListService
 from app.services.user_statistics_service import UserStatisticsService
@@ -16,8 +16,10 @@ logger = logging.getLogger(__name__)
 
 def get_user_service() -> UserService:
     """Get user service instance."""
-    firebase_service = FirebaseService(current_app.config)
-    return UserService(firebase_service)
+    if not hasattr(current_app, 'database_service') or not current_app.database_service:
+        raise RuntimeError("Database service not available")
+    database_service = current_app.database_service
+    return UserService(database_service)
 
 
 @auth_bp.route('/login', methods=['GET', 'POST'])
@@ -33,6 +35,11 @@ def login():
         
         if not user_code:
             flash('Please enter a user code.', 'error')
+            return render_template('login.html')
+        
+        # Check if database service is available
+        if not hasattr(current_app, 'database_service') or not current_app.database_service:
+            flash('System is still initializing. Please wait a moment and try again.', 'error')
             return render_template('login.html')
         
         # Validate user code format
@@ -63,6 +70,10 @@ def login():
             flash('Login failed. Please check your user code and try again.', 'error')
             return render_template('login.html')
     
+    except RuntimeError as e:
+        logger.error(f"Database service not available during login: {str(e)}")
+        flash('System is still initializing. Please wait a moment and try again.', 'error')
+        return render_template('login.html')
     except Exception as e:
         logger.error(f"Error during login: {str(e)}")
         flash('An error occurred during login. Please try again.', 'error')
@@ -141,10 +152,10 @@ def profile():
             return redirect(url_for('auth.login'))
         
         # Get services
-        firebase_service = FirebaseService(current_app.config)
-        user_service = UserService(firebase_service)
-        shopping_list_service = ShoppingListService(firebase_service, current_app.excel_data)
-        statistics_service = UserStatisticsService(firebase_service)
+        database_service = current_app.database_service
+        user_service = UserService(database_service)
+        shopping_list_service = ShoppingListService(database_service)
+        statistics_service = UserStatisticsService(database_service)
         
         user = user_service.validate_session(session.get('session_id'))
         
@@ -221,10 +232,25 @@ def login_required(f):
     
     @wraps(f)
     def decorated_function(*args, **kwargs):
+        # Check if this is an API request (expects JSON response)
+        is_api_request = request.path.startswith('/api/') or request.path.startswith('/shopping-list/')
+        
+        # Debug: Log session data
+        logger.info(f"Session data: {dict(session)}")
+        logger.info(f"Request path: {request.path}")
+        
+        # Simple session check - just verify user_code exists
         if 'user_code' not in session:
+            logger.warning(f"No user_code in session. Session keys: {list(session.keys())}")
+            if is_api_request:
+                return jsonify({'success': False, 'error': 'Authentication required'}), 401
             return redirect(url_for('auth.login'))
         
-        # Validate session
+        # For API requests, just pass through - no heavy validation
+        if is_api_request:
+            return f(*args, **kwargs)
+        
+        # For web requests, do full validation
         try:
             user_service = get_user_service()
             user = user_service.validate_session(session.get('session_id'))

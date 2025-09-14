@@ -8,7 +8,6 @@ import logging
 from flask import Blueprint, request, jsonify, current_app, session
 from datetime import datetime, timezone
 
-from app.services.firebase_service import FirebaseService
 from app.services.search_service import SearchService
 from app.services.shopping_list_service import ShoppingListService
 from app.services.user_service import UserService
@@ -19,17 +18,61 @@ api_bp = Blueprint('api', __name__)
 logger = logging.getLogger(__name__)
 
 
+@api_bp.route('/loading-status', methods=['GET'])
+def loading_status():
+    """Get current loading status of the application."""
+    try:
+        if not hasattr(current_app, 'loading_state'):
+            return jsonify({
+                'success': True,
+                'data': {
+                    'loaded': False,
+                    'loading': True,
+                    'error': 'Loading state not initialized'
+                }
+            })
+        
+        loading_state = current_app.loading_state
+        
+        return jsonify({
+            'success': True,
+            'data': {
+                'loaded': loading_state.get('loaded', False),
+                'loading': loading_state.get('loading', True),
+                'syncing': loading_state.get('syncing', False),
+                'error': loading_state.get('error'),
+                'progress': loading_state.get('progress', 0),
+                'current_step': loading_state.get('current_step', 'Initializing...'),
+                'product_count': loading_state.get('product_count', 0)
+            }
+        })
+        
+    except Exception as e:
+        logger.error(f"Error getting loading status: {str(e)}")
+        return jsonify({
+            'success': False,
+            'error': {
+                'code': 'LOADING_STATUS_ERROR',
+                'message': 'Failed to get loading status'
+            }
+        }), 500
+
+
 def get_services():
     """Get service instances."""
-    # Always use Firebase services - no production bypass
-    firebase_service = FirebaseService(current_app.config)
-    user_service = UserService(firebase_service)
-    shopping_list_service = ShoppingListService(firebase_service, current_app.excel_data)
+    # Check if database service is available
+    if not hasattr(current_app, 'database_service') or not current_app.database_service:
+        raise RuntimeError("Database service not available")
+    
+    # Use PostgreSQL services
+    database_service = current_app.database_service
+    user_service = UserService(database_service)
+    shopping_list_service = ShoppingListService(database_service)
         
     # Use singleton SearchService stored on app
     if not hasattr(current_app, 'search_service') or current_app.search_service is None:
-        if current_app.excel_data.get('loaded', False):
-            current_app.search_service = SearchService(current_app.excel_data)
+        if hasattr(current_app, 'loading_state') and current_app.loading_state.get('loaded', False):
+            current_app.search_service = SearchService(database_service)
         else:
             current_app.search_service = None
     search_service = current_app.search_service
@@ -65,54 +108,55 @@ def get_all_products():
     Returns lightweight product data optimized for search performance.
     """
     try:
-        # Check if data is still loading
-        if current_app.excel_data.get('loading', False):
+        # Check if database service is available
+        if not hasattr(current_app, 'database_service') or not current_app.database_service:
+            return api_response(
+                success=False,
+                error="Database service not available",
+                status_code=503
+            )
+        
+        # Check if products are still loading
+        if hasattr(current_app, 'loading_state') and current_app.loading_state.get('loading', True):
             return api_response(
                 success=False,
                 error="Products are still loading, please try again in a moment",
                 status_code=503
             )
         
-        # Use ProductService only - no Excel fallback
-        products = []
-        if hasattr(current_app, 'product_service') and current_app.product_service:
-            try:
-                products = current_app.product_service.get_all_products()
-                logger.info(f"Retrieved {len(products)} products from ProductService")
-            except Exception as e:
-                logger.error(f"ProductService failed: {str(e)}")
-                return api_response(
-                    success=False,
-                    error="ProductService unavailable",
-                    status_code=503
-                )
-        else:
-            # Use excel_data structure (populated from Firestore)
-            products = current_app.excel_data.get('products', [])
+        # Use database service to get products
+        products = current_app.database_service.get_all_products()
+        logger.info(f"Retrieved {len(products)} products from database")
         
         # Create lightweight product data for client-side search
         product_data = []
         for product in products:
             # Only include essential data for search results
             product_dict = {
-                'id': product.menora_id,
-                'hebrew': product.descriptions.hebrew if product.descriptions else '',
-                'english': product.descriptions.english if product.descriptions else '',
-                'category': product.category,
-                'supplier_code': product.supplier_code,
-                'image_url': product.image_url,
-                'has_image': product.has_image,
-                'price': product.pricing.price if product.pricing else None,
-                'currency': product.pricing.currency if product.pricing else 'ILS'
+                'id': product.get('menora_id', ''),
+                'hebrew': product.get('name_hebrew', ''),
+                'english': product.get('name_english', ''),
+                'category': product.get('category', ''),
+                'subcategory': product.get('subcategory', ''),
+                'price': product.get('price'),
+                'currency': 'ILS'
             }
             
             # Add specifications if available  
-            if product.specifications:
-                product_dict['type'] = product.specifications.type
-                product_dict['material'] = product.specifications.material
-                product_dict['height'] = product.specifications.height
-                product_dict['width'] = product.specifications.width
-                product_dict['thickness'] = product.specifications.thickness
+            specifications = product.get('specifications', {})
+            if specifications:
+                if isinstance(specifications, str):
+                    import json
+                    try:
+                        specifications = json.loads(specifications)
+                    except json.JSONDecodeError:
+                        specifications = {}
+                
+                product_dict['type'] = specifications.get('type', '')
+                product_dict['material'] = specifications.get('material', '')
+                product_dict['height'] = specifications.get('height', '')
+                product_dict['width'] = specifications.get('width', '')
+                product_dict['thickness'] = specifications.get('thickness', '')
             
             product_data.append(product_dict)
         
@@ -194,6 +238,10 @@ def login():
         if not user_code:
             return api_response(False, error={'code': 'INVALID_INPUT', 'message': 'User code is required'}, status_code=400)
         
+        # Check if database service is available
+        if not hasattr(current_app, 'database_service') or not current_app.database_service:
+            return api_response(False, error={'code': 'SERVICE_UNAVAILABLE', 'message': 'System is still initializing'}, status_code=503)
+        
         user_service, _, _, _, _ = get_services()
         
         if not user_service.is_valid_user_code(user_code):
@@ -214,6 +262,9 @@ def login():
         else:
             return api_response(False, error={'code': 'AUTH_FAILED', 'message': 'Authentication failed'}, status_code=401)
     
+    except RuntimeError as e:
+        logger.error(f"Database service not available in API login: {str(e)}")
+        return api_response(False, error={'code': 'SERVICE_UNAVAILABLE', 'message': 'System is still initializing'}, status_code=503)
     except Exception as e:
         logger.error(f"Error in API login: {str(e)}")
         return api_response(False, error={'code': 'INTERNAL_ERROR', 'message': 'Login failed'}, status_code=500)
@@ -550,7 +601,7 @@ def get_product_details(menora_id):
         if not product:
             return api_response(False, error={'code': 'PRODUCT_NOT_FOUND', 'message': 'Product not found'}, status_code=404)
         
-        return api_response(True, data=product.to_dict())
+        return api_response(True, data=product)  # product is already a dictionary from database
     
     except Exception as e:
         logger.error(f"Error getting product details: {str(e)}")
@@ -633,7 +684,7 @@ def calculate_pricing():
 
 @api_bp.route('/admin/refresh-data', methods=['POST'])
 def refresh_data():
-    """Refresh Firestore data cache endpoint."""
+    """Refresh database data cache endpoint."""
     try:
         # In a production app, you'd check admin permissions here
         # For now, allow any authenticated user to refresh data
@@ -642,31 +693,21 @@ def refresh_data():
         if error_response:
             return error_response
         
-        # Clear ProductService cache to force reload from Firestore
-        if hasattr(current_app, 'product_service') and current_app.product_service:
-            current_app.product_service.clear_cache()
-            
-            # Reload products from Firestore
-            products = current_app.product_service.get_all_products()
-            
-            # Update application cache
-            current_app.excel_data['products'] = products
-            current_app.excel_data['loaded'] = True
-            
-            # Reinitialize search service
-            from app.services.search_service import SearchService
-            current_app.search_service = SearchService(current_app.excel_data)
-            
-            response_data = {
-                'productsLoaded': len(products),
-                'loadTime': 'N/A',
-                'lastRefresh': datetime.now(timezone.utc).isoformat(),
-                'dataSource': 'firestore'
-            }
-            
-            return api_response(True, data=response_data, message='Firestore data refreshed successfully')
-        else:
-            return api_response(False, error={'code': 'SERVICE_UNAVAILABLE', 'message': 'ProductService not available'}, status_code=503)
+        # Check if database service is available
+        if not hasattr(current_app, 'database_service') or not current_app.database_service:
+            return api_response(False, error={'code': 'SERVICE_UNAVAILABLE', 'message': 'Database service not available'}, status_code=503)
+        
+        # Get current product count from database
+        product_count = current_app.database_service.get_products_count()
+        
+        response_data = {
+            'productsLoaded': product_count,
+            'loadTime': 'N/A',
+            'lastRefresh': datetime.now(timezone.utc).isoformat(),
+            'dataSource': 'database'
+        }
+        
+        return api_response(True, data=response_data, message='Database data refreshed successfully')
     
     except Exception as e:
         logger.error(f"Error refreshing data: {str(e)}")
@@ -684,7 +725,7 @@ def get_statistics():
         user_service, search_service, shopping_list_service, _, _ = get_services()
         
         # Get various statistics
-        user_stats = user_service.firebase.get_user_statistics()
+        user_stats = user_service.get_statistics()
         list_stats = shopping_list_service.get_list_statistics()
         search_stats = search_service.get_statistics()
         
@@ -696,7 +737,7 @@ def get_statistics():
                 'withPricing': search_stats['with_pricing']
             },
             'system': {
-                'dataLastRefreshed': current_app.excel_data.get('loaded_at', '').isoformat() if hasattr(current_app, 'excel_data') else None,
+                'dataLastRefreshed': datetime.now(timezone.utc).isoformat(),
                 'uptime': 'N/A',  # Would implement actual uptime tracking
                 'memoryUsage': 'N/A'  # Would implement actual memory monitoring
             }
@@ -713,34 +754,24 @@ def get_statistics():
 def get_loading_status():
     """Get product data loading status."""
     try:
-        excel_data = getattr(current_app, 'excel_data', {})
-        product_service = getattr(current_app, 'product_service', None)
+        # Check loading state from app initialization
+        loading_state = getattr(current_app, 'loading_state', {})
+        database_service = getattr(current_app, 'database_service', None)
+        
+        # Get product count from database if available
+        product_count = 0
+        if database_service and database_service.is_available():
+            product_count = database_service.get_products_count()
         
         status_data = {
-            'loading': excel_data.get('loading', False),
-            'loaded': excel_data.get('loaded', False),
-            'syncing': excel_data.get('syncing', False),
-            'productCount': len(excel_data.get('products', [])),
+            'loading': loading_state.get('loading', False),
+            'loaded': loading_state.get('loaded', False),
+            'syncing': loading_state.get('syncing', False),
+            'productCount': product_count,
             'hasSearchService': current_app.search_service is not None,
-            'hasProductService': product_service is not None,
-            'usingFirestore': product_service is not None and product_service.is_available(),
-            'firestoreOnly': True
+            'hasDatabaseService': database_service is not None and database_service.is_available(),
+            'usingDatabase': True
         }
-        
-        # Add ProductService cache stats if available
-        if product_service:
-            try:
-                cache_stats = product_service.get_cache_stats()
-                status_data['productService'] = {
-                    'available': product_service.is_available(),
-                    'cacheStats': cache_stats
-                }
-            except Exception as e:
-                logger.warning(f"Error getting ProductService stats: {str(e)}")
-                status_data['productService'] = {
-                    'available': product_service.is_available(),
-                    'error': str(e)
-                }
         
         return api_response(True, data=status_data)
     
@@ -753,19 +784,24 @@ def get_loading_status():
 def health_check():
     """Health check endpoint for Cloud Run."""
     try:
-        excel_data = getattr(current_app, 'excel_data', {})
-        product_service = getattr(current_app, 'product_service', None)
+        loading_state = getattr(current_app, 'loading_state', {})
+        database_service = getattr(current_app, 'database_service', None)
+        
+        # Get product count from database if available
+        product_count = 0
+        if database_service and database_service.is_available():
+            product_count = database_service.get_products_count()
         
         health_data = {
             'status': 'healthy',
             'timestamp': datetime.now(timezone.utc).isoformat(),
-            'dataLoading': excel_data.get('loading', False),
-            'dataLoaded': excel_data.get('loaded', False),
-            'dataSyncing': excel_data.get('syncing', False),
-            'productCount': len(excel_data.get('products', [])),
-            'firestoreAvailable': product_service is not None and product_service.is_available(),
-            'dataSource': 'firestore',
-            'firestoreOnly': True
+            'dataLoading': loading_state.get('loading', False),
+            'dataLoaded': loading_state.get('loaded', False),
+            'dataSyncing': loading_state.get('syncing', False),
+            'productCount': product_count,
+            'databaseAvailable': database_service is not None and database_service.is_available(),
+            'dataSource': 'database',
+            'usingDatabase': True
         }
         
         return api_response(True, data=health_data)

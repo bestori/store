@@ -194,7 +194,14 @@ class DatabaseService:
     def get_user_by_code(self, user_code: str) -> Optional[Dict[str, Any]]:
         """Get user by user code."""
         results = self.execute_query(
-            "SELECT * FROM users WHERE user_code = :user_code",
+            """SELECT 
+                user_id as "userId",
+                user_code as "userCode", 
+                preferences,
+                created_at as "createdAt",
+                updated_at as "updatedAt",
+                last_activity as "lastActivity"
+               FROM users WHERE user_code = :user_code""",
             {"user_code": user_code}
         )
         return results[0] if results else None
@@ -219,6 +226,19 @@ class DatabaseService:
     
     def insert_product(self, product_data: Dict[str, Any]) -> bool:
         """Insert a product into the database."""
+        import json
+        
+        # Convert dict fields to JSON strings for PostgreSQL
+        processed_data = product_data.copy()
+        
+        # Convert specifications dict to JSON string
+        if 'specifications' in processed_data and isinstance(processed_data['specifications'], dict):
+            processed_data['specifications'] = json.dumps(processed_data['specifications'])
+        
+        # Convert dimensions dict to JSON string
+        if 'dimensions' in processed_data and isinstance(processed_data['dimensions'], dict):
+            processed_data['dimensions'] = json.dumps(processed_data['dimensions'])
+        
         return self.execute_update(
             """INSERT INTO products (
                 menora_id, name_hebrew, name_english, description_hebrew, 
@@ -233,7 +253,7 @@ class DatabaseService:
                 name_english = EXCLUDED.name_english,
                 price = EXCLUDED.price,
                 updated_at = CURRENT_TIMESTAMP""",
-            product_data
+            processed_data
         )
     
     def search_products(self, query: str, limit: int = 50) -> List[Dict[str, Any]]:
@@ -246,3 +266,38 @@ class DatabaseService:
                LIMIT :limit""",
             {"query": f"%{query}%", "limit": limit}
         )
+    
+    def get_products_count(self) -> int:
+        """Get total number of products."""
+        try:
+            result = self.execute_query("SELECT COUNT(*) as count FROM products")
+            return result[0]['count'] if result else 0
+        except Exception as e:
+            self.logger.error(f"Error getting products count: {str(e)}")
+            return 0
+    
+    def get_user_by_code(self, user_code: str) -> Optional[Dict[str, Any]]:
+        """Get user by user code."""
+        try:
+            result = self.execute_query(
+                "SELECT * FROM users WHERE user_code = :user_code LIMIT 1",
+                {'user_code': user_code}
+            )
+            return result[0] if result else None
+        except Exception as e:
+            self.logger.error(f"Error getting user by code: {str(e)}")
+            return None
+    
+    def create_user(self, user_code: str) -> bool:
+        """Create a new user."""
+        try:
+            user_id = f"user_{user_code}"
+            return self.execute_update(
+                """INSERT INTO users (user_id, user_code, preferences, created_at, updated_at, last_activity)
+                   VALUES (:user_id, :user_code, '{}', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+                   ON CONFLICT (user_code) DO NOTHING""",
+                {'user_id': user_id, 'user_code': user_code}
+            )
+        except Exception as e:
+            self.logger.error(f"Error creating user: {str(e)}")
+            return False

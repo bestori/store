@@ -5,17 +5,18 @@
 ### 1.1 High-Level Architecture
 ```
 ┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐
-│   Frontend      │    │   Flask API     │    │   Firebase      │
-│   (Templates)   │◄──►│   Application   │◄──►│   Firestore     │
-│ HTML Shopping   │    │                 │    │ Shopping Lists  │
-│     Lists       │    └─────────────────┘    │  User Data      │
-└─────────────────┘             │             └─────────────────┘
-                                 ▼
-                    ┌─────────────────────────┐
-                    │ Excel Data Cache        │
-                    │ (Read-Only In-Memory)   │
-                    │ • Product Database      │
-                    │ • Price Database        │
+│   Frontend      │    │   Flask API      │    │   PostgreSQL    │
+│   (Templates)   │◄──►│   Application    │◄──►│   Database      │
+│ HTML Shopping   │    │                  │    │ • Products      │
+│     Lists       │    └─────────────────┘    │ • Users         │
+└─────────────────┘             │             │ • Shopping Lists│
+                                 ▼             │ • Sessions      │
+                    ┌─────────────────────────┐ └─────────────────┘
+                    │ Excel Data Loader       │
+                    │ (Startup Process)       │
+                    │ • Load Products to DB    │
+                    │ • Update Existing        │
+                    │ • Show Loading State     │
                     └─────────────────────────┘
 ```
 
@@ -62,12 +63,13 @@ app/routes/
 #### 2.2.2 Business Logic Services
 ```
 app/services/
-├── excel_loader.py       # Read-only Excel file loading and caching
-├── search_service.py     # Search logic across cached Excel data
+├── excel_loader.py       # Excel file loading and database population
+├── database_service.py  # PostgreSQL database operations
+├── search_service.py     # Search logic across PostgreSQL data
 ├── shopping_list_service.py # User shopping list management
 ├── price_calculator.py   # Pricing and calculation logic
 ├── user_service.py       # User code authentication and management
-└── firebase_service.py   # Firebase Firestore integration
+└── product_service.py    # Product management and queries
 ```
 
 #### 2.2.3 Data Models
@@ -82,39 +84,40 @@ app/models/
 
 ### 2.3 Data Layer
 
-#### 2.3.1 Firebase Firestore
-- **Primary Database**: NoSQL document database for user data only
-- **Collections**: Shopping lists, users, user sessions
-- **Benefits**: Real-time updates, automatic scaling, offline support
+#### 2.3.1 PostgreSQL Database
+- **Primary Database**: Relational database for all application data
+- **Tables**: products, users, shopping_lists, user_sessions
+- **Benefits**: ACID compliance, complex queries, data integrity, scalability
 
-#### 2.3.2 Excel Data Storage (Read-Only)
-- **Excel Files**: Stored as static files, never modified
-- **In-Memory Cache**: Product and price data loaded into application memory
-- **Data Refresh**: Manual trigger to reload Excel data into cache
+#### 2.3.2 Excel Data Loading Process
+- **Excel Files**: Stored as static files, read during startup
+- **Database Population**: Products loaded from Excel into PostgreSQL on app startup
+- **Loading State**: Application shows loading screen until data is fully loaded
+- **Update Strategy**: Existing products updated with new prices/data, no duplicates created
 
 ## 3. Data Flow Architecture
 
-### 3.1 Excel Data Loading Flow (Read-Only)
+### 3.1 Excel Data Loading Flow (Startup Process)
 ```
-Excel Files → Validation → Parsing → Data Mapping → In-Memory Cache → Search Index
-     │             │          │           │              │               │
-     ▼             ▼          ▼           ▼              ▼               ▼
-  File Access   Schema      Extract     Lookup        Memory           Fast
-  Check         Check       Data        Tables        Storage         Search
+Excel Files → Validation → Parsing → Data Mapping → PostgreSQL Database → Search Ready
+     │             │          │           │              │                    │
+     ▼             ▼          ▼           ▼              ▼                    ▼
+  File Access   Schema      Extract     Transform     Database              App Ready
+  Check         Check       Data        to SQL       Population            (No Loading)
 ```
 
 ### 3.2 Search Processing Flow
 ```
-User Query → Input Validation → Search Service → In-Memory Search → Result Processing → Response
+User Query → Input Validation → Search Service → PostgreSQL Query → Result Processing → Response
      │              │               │                │                  │              │
      ▼              ▼               ▼                ▼                  ▼              ▼
-  Text/Filter   Sanitization   Cache Lookup     Excel Data       Format Results   JSON/HTML
-                                               Matching
+  Text/Filter   Sanitization   Database Query    SQL Execution     Format Results   JSON/HTML
+                                               (Fast Indexed)
 ```
 
 ### 3.3 Shopping List Management Flow
 ```
-Add Item → Validation → Shopping List Update → Firestore Save → HTML Generation
+Add Item → Validation → Shopping List Update → PostgreSQL Save → HTML Generation
     │           │              │                    │                │
     ▼           ▼              ▼                    ▼                ▼
  Item Check  Quantity     User's List          Persist          Generate

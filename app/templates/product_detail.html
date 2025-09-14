@@ -1,12 +1,12 @@
 <!DOCTYPE html>
-<html lang="{{ 'he' if preferred_language == 'hebrew' else 'en' }}"
-    dir="{{ 'rtl' if preferred_language == 'hebrew' else 'ltr' }}">
+<html lang="{{ 'he' if preferred_language == "hebrew" else 'en' }}"
+    dir="{{ 'rtl' if preferred_language == "hebrew" else 'ltr' }}">
 
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>{% if preferred_language == 'hebrew' %}פרטי מוצר{% else %}Product Details{% endif %} - {{
-        product.descriptions.hebrew if preferred_language == 'hebrew' else product.descriptions.english }}</title>
+    <title>{% if preferred_language == "hebrew" %}פרטי מוצר{% else %}Product Details{% endif %} - {{
+        product.name_hebrew if preferred_language == "hebrew" else product.name_english }}</title>
 
     <!-- Bootstrap CSS -->
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
@@ -15,7 +15,7 @@
     <!-- Custom CSS -->
     <link href="{{ url_for('static', filename='css/main.css') }}" rel="stylesheet">
 
-    {% if preferred_language == 'hebrew' %}
+    {% if preferred_language == "hebrew" %}
     <style>
         body {
             font-family: 'Segoe UI', Tahoma, Arial, sans-serif;
@@ -29,13 +29,13 @@
     {% endif %}
 </head>
 
-<body class="{{ 'rtl' if preferred_language == 'hebrew' else '' }}">
+<body class="{{ 'rtl' if preferred_language == "hebrew" else '' }}">
     <!-- Navigation -->
-    <nav class="navbar navbar-expand-lg navbar-dark bg-primary">
+    <nav class="navbar navbar-expand-lg navbar-dark bg-dark">
         <div class="container">
-            <a class="navbar-brand" href="{{ url_for('main.index') }}">
-                <i class="bi bi-shop"></i>
-                {% if preferred_language == 'hebrew' %}
+            <a class="navbar-brand" href="{{ url_for('search.search_page') }}">
+                <i class="bi bi-lightning-charge-fill"></i>
+                {% if preferred_language == "hebrew" %}
                 חנות
                 {% else %}
                 Store
@@ -47,19 +47,53 @@
             </button>
 
             <div class="collapse navbar-collapse" id="navbarNav">
-                <ul class="navbar-nav ms-auto">
+                <ul class="navbar-nav me-auto">
+                    {% if session.get('user_code') %}
                     <li class="nav-item">
                         <a class="nav-link" href="{{ url_for('search.search_page') }}">
                             <i class="bi bi-search"></i>
-                            {% if preferred_language == 'hebrew' %}חיפוש{% else %}Search{% endif %}
+                            {% if preferred_language == "hebrew" %}חיפוש{% else %}Search{% endif %}
                         </a>
                     </li>
                     <li class="nav-item">
                         <a class="nav-link" href="{{ url_for('shopping_list.shopping_lists_page') }}">
-                            <i class="bi bi-cart"></i>
-                            {% if preferred_language == 'hebrew' %}רשימות קניות{% else %}Shopping Lists{% endif %}
+                            <i class="bi bi-cart3"></i>
+                            {% if preferred_language == "hebrew" %}רשימות קניות{% else %}Shopping Lists{% endif %}
+                            <span class="shopping-list-badge" id="shopping-list-count" style="display: none;">0</span>
                         </a>
                     </li>
+                    {% endif %}
+                </ul>
+
+                <ul class="navbar-nav">
+                    {% if session.get('user_code') %}
+                    <li class="nav-item dropdown">
+                        <a class="nav-link dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown">
+                            <i class="bi bi-person-circle"></i>
+                            {{ session.get('user_code') }}
+                        </a>
+                        <ul class="dropdown-menu">
+                            <li><a class="dropdown-item" href="{{ url_for('auth.profile') }}">
+                                    <i class="bi bi-person"></i>
+                                    {% if preferred_language == "hebrew" %}פרופיל{% else %}Profile{% endif %}
+                                </a></li>
+                            <li>
+                                <hr class="dropdown-divider">
+                            </li>
+                            <li><a class="dropdown-item" href="{{ url_for('auth.logout') }}">
+                                    <i class="bi bi-box-arrow-right"></i>
+                                    {% if preferred_language == "hebrew" %}התנתקות{% else %}Logout{% endif %}
+                                </a></li>
+                        </ul>
+                    </li>
+                    {% else %}
+                    <li class="nav-item">
+                        <a class="nav-link" href="{{ url_for('auth.login') }}">
+                            <i class="bi bi-box-arrow-in-right"></i>
+                            {% if preferred_language == "hebrew" %}התחברות{% else %}Login{% endif %}
+                        </a>
+                    </li>
+                    {% endif %}
                 </ul>
             </div>
         </div>
@@ -69,12 +103,12 @@
         <!-- Breadcrumb -->
         <nav aria-label="breadcrumb">
             <ol class="breadcrumb">
-                <li class="breadcrumb-item"><a href="{{ url_for('main.index') }}">{% if preferred_language == 'hebrew'
+                <li class="breadcrumb-item"><a href="{{ url_for('main.index') }}">{% if preferred_language == "hebrew"
                         %}בית{% else %}Home{% endif %}</a></li>
                 <li class="breadcrumb-item"><a href="{{ url_for('search.search_page') }}">{% if preferred_language ==
                         'hebrew' %}חיפוש{% else %}Search{% endif %}</a></li>
-                <li class="breadcrumb-item active" aria-current="page">{{ product.descriptions.hebrew if
-                    preferred_language == 'hebrew' else product.descriptions.english }}</li>
+                <li class="breadcrumb-item active" aria-current="page">{{ product.name_hebrew if
+                    preferred_language == "hebrew" else product.name_english }}</li>
             </ol>
         </nav>
 
@@ -85,14 +119,14 @@
                     <div class="card-body text-center">
                         {% if product.image_url and product.image_url != 'undefined' and product.image_url != None %}
                         <img src="{{ product.image_url }}"
-                            alt="{{ product.descriptions.hebrew if preferred_language == 'hebrew' else product.descriptions.english }}"
+                            alt="{{ product.name_hebrew if preferred_language == "hebrew" else product.name_english }}"
                             class="img-fluid rounded" style="max-height: 400px;">
                         {% else %}
                         <div class="placeholder-image d-flex align-items-center justify-content-center bg-light rounded"
                             style="height: 300px;">
                             <div class="text-center text-muted">
                                 <i class="bi bi-image" style="font-size: 4rem;"></i>
-                                <p class="mt-2">{% if preferred_language == 'hebrew' %}אין תמונה זמינה{% else %}No Image
+                                <p class="mt-2">{% if preferred_language == "hebrew" %}אין תמונה זמינה{% else %}No Image
                                     Available{% endif %}</p>
                             </div>
                         </div>
@@ -106,24 +140,21 @@
                 <div class="card">
                     <div class="card-header">
                         <h3 class="card-title mb-0">
-                            {% if preferred_language == 'hebrew' %}
-                            {{ product.descriptions.hebrew }}
-                            {% else %}
-                            {{ product.descriptions.english }}
-                            {% endif %}
+                            {{ product.name_hebrew }}
+                            <br><small class="text-muted">{{ product.name_english }}</small>
                         </h3>
                     </div>
                     <div class="card-body">
                         <!-- Product Info -->
                         <div class="row mb-3">
-                            <div class="col-sm-4"><strong>{% if preferred_language == 'hebrew' %}קוד מוצר{% else
+                            <div class="col-sm-4"><strong>{% if preferred_language == "hebrew" %}קוד מוצר{% else
                                     %}Product Code{% endif %}:</strong></div>
                             <div class="col-sm-8">{{ product.menora_id }}</div>
                         </div>
 
                         {% if product.supplier_code %}
                         <div class="row mb-3">
-                            <div class="col-sm-4"><strong>{% if preferred_language == 'hebrew' %}קוד ספק{% else
+                            <div class="col-sm-4"><strong>{% if preferred_language == "hebrew" %}קוד ספק{% else
                                     %}Supplier Code{% endif %}:</strong></div>
                             <div class="col-sm-8">{{ product.supplier_code }}</div>
                         </div>
@@ -131,66 +162,60 @@
 
                         {% if product.category %}
                         <div class="row mb-3">
-                            <div class="col-sm-4"><strong>{% if preferred_language == 'hebrew' %}קטגוריה{% else
+                            <div class="col-sm-4"><strong>{% if preferred_language == "hebrew" %}קטגוריה{% else
                                     %}Category{% endif %}:</strong></div>
                             <div class="col-sm-8">{{ product.category }}</div>
                         </div>
                         {% endif %}
 
-                        {% if product.specifications %}
-                        {% if product.specifications.type %}
+                        {% if specifications %}
+                        {% if specifications.type %}
                         <div class="row mb-3">
-                            <div class="col-sm-4"><strong>{% if preferred_language == 'hebrew' %}סוג{% else %}Type{%
-                                    endif %}:</strong></div>
-                            <div class="col-sm-8">{{ product.specifications.type }}</div>
+                            <div class="col-sm-4"><strong>{% if preferred_language == "hebrew" %}סוג / Type{% else %}Type / סוג{% endif %}:</strong></div>
+                            <div class="col-sm-8">{{ specifications.type }}</div>
                         </div>
                         {% endif %}
 
-                        {% if product.specifications.material %}
+                        {% if specifications.material %}
                         <div class="row mb-3">
-                            <div class="col-sm-4"><strong>{% if preferred_language == 'hebrew' %}חומר{% else
-                                    %}Material{% endif %}:</strong></div>
-                            <div class="col-sm-8">{{ product.specifications.material }}</div>
+                            <div class="col-sm-4"><strong>{% if preferred_language == "hebrew" %}חומר / Material{% else %}Material / חומר{% endif %}:</strong></div>
+                            <div class="col-sm-8">{{ specifications.material }}</div>
                         </div>
                         {% endif %}
 
-                        {% if product.specifications.height %}
+                        {% if specifications.height %}
                         <div class="row mb-3">
-                            <div class="col-sm-4"><strong>{% if preferred_language == 'hebrew' %}גובה{% else %}Height{%
-                                    endif %}:</strong></div>
-                            <div class="col-sm-8">{{ product.specifications.height }}mm</div>
+                            <div class="col-sm-4"><strong>{% if preferred_language == "hebrew" %}גובה / Height{% else %}Height / גובה{% endif %}:</strong></div>
+                            <div class="col-sm-8">{{ specifications.height }}mm</div>
                         </div>
                         {% endif %}
 
-                        {% if product.specifications.width %}
+                        {% if specifications.width %}
                         <div class="row mb-3">
-                            <div class="col-sm-4"><strong>{% if preferred_language == 'hebrew' %}רוחב{% else %}Width{%
-                                    endif %}:</strong></div>
-                            <div class="col-sm-8">{{ product.specifications.width }}mm</div>
+                            <div class="col-sm-4"><strong>{% if preferred_language == "hebrew" %}רוחב / Width{% else %}Width / רוחב{% endif %}:</strong></div>
+                            <div class="col-sm-8">{{ specifications.width }}mm</div>
                         </div>
                         {% endif %}
 
-                        {% if product.specifications.thickness %}
+                        {% if specifications.thickness %}
                         <div class="row mb-3">
-                            <div class="col-sm-4"><strong>{% if preferred_language == 'hebrew' %}עובי{% else
-                                    %}Thickness{% endif %}:</strong></div>
-                            <div class="col-sm-8">{{ product.specifications.thickness }}mm</div>
+                            <div class="col-sm-4"><strong>{% if preferred_language == "hebrew" %}עובי / Thickness{% else %}Thickness / עובי{% endif %}:</strong></div>
+                            <div class="col-sm-8">{{ specifications.thickness }}mm</div>
                         </div>
                         {% endif %}
                         {% endif %}
 
                         <!-- Pricing -->
-                        {% if product.pricing and product.pricing.base_price %}
+                        {% if pricing and pricing.base_price %}
                         <div class="row mb-3">
-                            <div class="col-sm-4"><strong>{% if preferred_language == 'hebrew' %}מחיר{% else %}Price{%
-                                    endif %}:</strong></div>
+                            <div class="col-sm-4"><strong>{% if preferred_language == "hebrew" %}מחיר / Price{% else %}Price / מחיר{% endif %}:</strong></div>
                             <div class="col-sm-8">
                                 <span class="fs-5 text-primary" id="unitPrice"
-                                    data-unit-price="{{ '%.2f'|format(product.pricing.base_price) }}">
-                                    ₪{{ "%.2f"|format(product.pricing.base_price) }}
+                                    data-unit-price="{{ '%.2f'|format(pricing.base_price) }}">
+                                    ₪{{ "%.2f"|format(pricing.base_price) }}
                                 </span>
-                                {% if product.pricing.currency and product.pricing.currency != 'ILS' %}
-                                <small class="text-muted">({{ product.pricing.currency }})</small>
+                                {% if pricing.currency and pricing.currency != 'ILS' %}
+                                <small class="text-muted">({{ pricing.currency }})</small>
                                 {% endif %}
                             </div>
                         </div>
@@ -213,12 +238,11 @@
                                             <div class="col-md-6">
                                                 <div class="mb-2">
                                                     <small class="text-muted">
-                                                        {% if preferred_language == 'hebrew' %}רוחב יחידה:{% else %}Unit
+                                                        {% if preferred_language == "hebrew" %}רוחב יחידה:{% else %}Unit
                                                         Width:{% endif %}
                                                         <span id="unitWidth"
-                                                            data-unit-width="{{ product.specifications.width if product.specifications and product.specifications.width else 0 }}">{{
-                                                            product.specifications.width if product.specifications and
-                                                            product.specifications.width else '—' }} mm</span>
+                                                            data-unit-width="{{ specifications.width if specifications and specifications.width else 0 }}">{{
+                                                            specifications.width if specifications and specifications.width else '—' }} mm</span>
                                                     </small>
                                                 </div>
                                                 <div id="calcSummary" class="small"></div>
@@ -226,12 +250,12 @@
                                         </div>
                                         <div class="d-flex gap-2 mt-3">
                                             <button type="button" class="btn btn-outline-secondary"
-                                                onclick="calculateUnits()">{% if preferred_language == 'hebrew' %}חשב{%
+                                                onclick="calculateUnits()">{% if preferred_language == "hebrew" %}חשב{%
                                                 else %}Calculate{% endif %}</button>
                                             <button type="button" class="btn btn-primary flex-grow-1"
                                                 onclick="addToCart()">
                                                 <i class="bi bi-cart-plus"></i>
-                                                {% if preferred_language == 'hebrew' %}הוסף לסל{% else %}Add to Cart{%
+                                                {% if preferred_language == "hebrew" %}הוסף לסל{% else %}Add to Cart{%
                                                 endif %}
                                             </button>
                                         </div>
@@ -274,23 +298,23 @@
 
             const summaryEl = document.getElementById('calcSummary');
             if (!unitWidth || !totalLength || totalLength <= 0) {
-                summaryEl.innerHTML = '<span class="text-danger">' + ('{% if preferred_language == 'hebrew' %}אנא הזן אורך תקין ובדוק שלמוצר יש רוחב.{% else %}Enter a valid length and ensure product has a width.{% endif %}') + '</span>';
+                summaryEl.innerHTML = '<span class="text-danger">' + ('{% if preferred_language == "hebrew" %}אנא הזן אורך תקין ובדוק שלמוצר יש רוחב.{% else %}Enter a valid length and ensure product has a width.{% endif %}') + '</span>';
                 return { quantity: 0, totalPrice: 0 };
             }
 
             const quantity = Math.ceil(totalLength / unitWidth);
             const totalPrice = unitPrice ? (quantity * unitPrice) : 0;
             summaryEl.innerHTML = (
-                '{% if preferred_language == 'hebrew' %}כמות יחידות:{% else %}Units:{% endif %} ' + quantity +
-                    ' | ' + '{% if preferred_language == 'hebrew' %}אורך כולל:{% else %}Total Length:{% endif %} ' + totalLength + ' mm' +
-                        (unitPrice ? (' | ' + '{% if preferred_language == 'hebrew' %}מחיר כולל:{% else %}Total Price:{% endif %} ₪' + totalPrice.toFixed(2)) : '')
+                '{% if preferred_language == "hebrew" %}כמות יחידות:{% else %}Units:{% endif %} ' + quantity +
+                    ' | ' + '{% if preferred_language == "hebrew" %}אורך כולל:{% else %}Total Length:{% endif %} ' + totalLength + ' mm' +
+                        (unitPrice ? (' | ' + '{% if preferred_language == "hebrew" %}מחיר כולל:{% else %}Total Price:{% endif %} ₪' + totalPrice.toFixed(2)) : '')
             );
 
             return { quantity, totalPrice, totalLength };
         }
 
         function addToCart() {
-            const productId = '{{ product.menora_id }}';
+            const productId = '{{ product.menora_id|e }}';
             const addButton = document.querySelector('button[onclick="addToCart()"]');
 
             const calc = calculateUnits();
@@ -315,21 +339,28 @@
                 })
             })
                 .then(async (response) => {
-                    const data = await response.json().catch(() => ({ success: false, error: 'Invalid response' }));
                     if (!response.ok) {
                         if (response.status === 401) {
                             throw new Error('{% if preferred_language == "hebrew" %}נדרש להתחבר כדי להוסיף לרשימה{% else %}You must be logged in to add to shopping list{% endif %}');
                         }
-                        throw new Error(data.error || 'Request failed');
+                        const errorData = await response.json().catch(() => ({ error: 'Request failed' }));
+                        throw new Error(errorData.error || 'Request failed');
                     }
-                    return data;
+                    return await response.json();
                 })
                 .then(data => {
+                    console.log('Add to cart response:', data);
                     if (data.success) {
                         // Show success message
                         const message = '{% if preferred_language == "hebrew" %}המוצר נוסף לסל!{% else %}Product added to cart!{% endif %}';
                         showNotification(message, 'success');
+                        
+                        // Redirect to shopping list after 1 second
+                        setTimeout(() => {
+                            window.location.href = '/shopping-list';
+                        }, 1000);
                     } else {
+                        console.error('Add to cart failed:', data);
                         showNotification(data.error || 'Failed to add product', 'error');
                     }
                 })
@@ -360,7 +391,5 @@
         }
     </script>
 </body>
-
-</html>
 
 </html>

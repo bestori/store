@@ -21,20 +21,17 @@ class SearchService:
     Provides text search, filtered search, and search suggestions.
     """
     
-    def __init__(self, excel_data: Dict[str, Any], product_service=None, database_service=None):
+    def __init__(self, database_service=None):
         """
         Initialize search service with database service.
         
         Args:
-            excel_data: Dictionary containing loaded products and metadata (unused for database search)
-            product_service: Optional ProductService for Firestore queries (unused)
             database_service: DatabaseService for PostgreSQL queries
         """
         self.logger = logging.getLogger(__name__)
         
-        # Store services
+        # Store database service
         self.database_service = database_service
-        self.product_service = product_service
         
         # Hebrew type translations (from actual Excel data)
         self.type_translations = {
@@ -142,10 +139,83 @@ class SearchService:
         return SearchResult.create_empty(query, execution_time, language)
     
     def filter_search(self, filters: Dict[str, Any], limit: int = 20, offset: int = 0) -> SearchResult:
-        """Perform filtered search - for now just return empty results."""
+        """Perform filtered search using database."""
         start_time = time.time()
-        execution_time = time.time() - start_time
-        return SearchResult.create_empty(str(filters), execution_time, filters=filters)
+        
+        if not self.database_service:
+            execution_time = time.time() - start_time
+            return SearchResult.create_empty(str(filters), execution_time, filters=filters)
+        
+        try:
+            # Build SQL query with filters
+            where_conditions = []
+            params = {}
+            
+            for key, value in filters.items():
+                if key == 'type' and value:
+                    where_conditions.append("specifications::text LIKE :type_filter")
+                    params['type_filter'] = f'%"type":"{value}"%'
+                elif key == 'material' and value:
+                    where_conditions.append("specifications::text LIKE :material_filter")
+                    params['material_filter'] = f'%"material":"{value}"%'
+                elif key == 'height' and value:
+                    where_conditions.append("specifications::text LIKE :height_filter")
+                    params['height_filter'] = f'%"height":"{value}"%'
+                elif key == 'width' and value:
+                    where_conditions.append("specifications::text LIKE :width_filter")
+                    params['width_filter'] = f'%"width":"{value}"%'
+                elif key == 'thickness' and value:
+                    where_conditions.append("specifications::text LIKE :thickness_filter")
+                    params['thickness_filter'] = f'%"thickness":"{value}"%'
+                elif key == 'category' and value:
+                    where_conditions.append("category ILIKE :category_filter")
+                    params['category_filter'] = f'%{value}%'
+            
+            # Build query
+            query = "SELECT * FROM products"
+            if where_conditions:
+                query += " WHERE " + " AND ".join(where_conditions)
+            query += " ORDER BY name_hebrew LIMIT :limit OFFSET :offset"
+            
+            params['limit'] = limit
+            params['offset'] = offset
+            
+            # Execute query
+            results = self.database_service.execute_query(query, params)
+            
+            # Get total count for pagination
+            count_query = "SELECT COUNT(*) as count FROM products"
+            if where_conditions:
+                count_query += " WHERE " + " AND ".join(where_conditions)
+            
+            count_params = {k: v for k, v in params.items() if k not in ['limit', 'offset']}
+            count_result = self.database_service.execute_query(count_query, count_params)
+            total_count = count_result[0]['count'] if count_result else 0
+            
+            execution_time = time.time() - start_time
+            
+            # Create search result
+            return SearchResult(
+                results=results,
+                pagination=SearchPagination(
+                    total=total_count,
+                    limit=limit,
+                    offset=offset,
+                    has_more=offset + limit < total_count
+                ),
+                search_info=SearchInfo(
+                    query=str(filters),
+                    execution_time=execution_time,
+                    language='both',
+                    filters=filters,
+                    search_type='filter'
+                )
+            )
+            
+        except Exception as e:
+            self.logger.error(f"Filter search failed: {str(e)}")
+            execution_time = time.time() - start_time
+            return SearchResult.create_empty(str(filters), execution_time, filters=filters)
     
     def combined_search(self, query: Optional[str] = None, filters: Optional[Dict[str, Any]] = None,
                        language: Optional[str] = None, limit: int = 20, offset: int = 0) -> SearchResult:
@@ -156,8 +226,59 @@ class SearchService:
             return self.filter_search(filters or {}, limit, offset)
     
     def get_available_filters(self, language: str = 'hebrew') -> Dict[str, List[Any]]:
-        """Get available filter options."""
-        return {}
+        """Get available filter options from database."""
+        if not self.database_service:
+            return {}
+        
+        try:
+            # Get unique categories
+            categories_result = self.database_service.execute_query(
+                "SELECT DISTINCT category FROM products WHERE category IS NOT NULL ORDER BY category"
+            )
+            categories = [row['category'] for row in categories_result if row['category']]
+            
+            # Get unique types from specifications
+            types_result = self.database_service.execute_query(
+                "SELECT DISTINCT jsonb_extract_path_text(specifications, 'type') as type FROM products WHERE specifications IS NOT NULL AND jsonb_extract_path_text(specifications, 'type') IS NOT NULL ORDER BY type"
+            )
+            types = [row['type'] for row in types_result if row['type']]
+            
+            # Get unique materials from specifications
+            materials_result = self.database_service.execute_query(
+                "SELECT DISTINCT jsonb_extract_path_text(specifications, 'material') as material FROM products WHERE specifications IS NOT NULL AND jsonb_extract_path_text(specifications, 'material') IS NOT NULL ORDER BY material"
+            )
+            materials = [row['material'] for row in materials_result if row['material']]
+            
+            # Get unique heights from specifications
+            heights_result = self.database_service.execute_query(
+                "SELECT height FROM (SELECT DISTINCT jsonb_extract_path_text(specifications, 'height') as height FROM products WHERE specifications IS NOT NULL AND jsonb_extract_path_text(specifications, 'height') IS NOT NULL) t ORDER BY height::int"
+            )
+            heights = [row['height'] for row in heights_result if row['height']]
+            
+            # Get unique widths from specifications
+            widths_result = self.database_service.execute_query(
+                "SELECT width FROM (SELECT DISTINCT jsonb_extract_path_text(specifications, 'width') as width FROM products WHERE specifications IS NOT NULL AND jsonb_extract_path_text(specifications, 'width') IS NOT NULL) t ORDER BY width::int"
+            )
+            widths = [row['width'] for row in widths_result if row['width']]
+            
+            # Get unique thicknesses from specifications
+            thicknesses_result = self.database_service.execute_query(
+                "SELECT thickness FROM (SELECT DISTINCT jsonb_extract_path_text(specifications, 'thickness') as thickness FROM products WHERE specifications IS NOT NULL AND jsonb_extract_path_text(specifications, 'thickness') IS NOT NULL) t ORDER BY thickness::float"
+            )
+            thicknesses = [row['thickness'] for row in thicknesses_result if row['thickness']]
+            
+            return {
+                'categories': categories,
+                'types': types,
+                'materials': materials,
+                'heights': heights,
+                'widths': widths,
+                'thicknesses': thicknesses
+            }
+            
+        except Exception as e:
+            self.logger.error(f"Error getting filter options: {str(e)}")
+            return {}
     
     def get_popular_searches(self, limit: int = 10) -> List[str]:
         """Get popular search terms."""

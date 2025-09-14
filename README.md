@@ -1,32 +1,33 @@
 # Store 🏪
 
-A bilingual (Hebrew/English) Flask web application for cable tray product management with shopping list functionality. The application uses Excel files as a read-only database and generates HTML shopping lists for users.
+A bilingual (Hebrew/English) Flask web application for cable tray product management with shopping list functionality. The application loads product data from Excel files into PostgreSQL database on startup and provides fast search capabilities.
 
 ## ✨ Features
 
 - **Bilingual Support**: Complete Hebrew and English interface with RTL/LTR support
-- **Excel-Based Catalog**: Uses Excel files as read-only product database
+- **PostgreSQL Database**: Products loaded from Excel files into PostgreSQL for fast queries
 - **Smart Search**: Text search and parametric filtering by TYPE-HEIGHT-WIDTH-THICKNESS-GALVANIZATION
 - **Shopping Lists**: Create, manage, and export personalized shopping lists
 - **User Management**: Simple authentication with unique user codes
 - **HTML Export**: Generate printable HTML shopping lists
-- **Firebase Integration**: Optional cloud storage for user data
+- **Loading State**: Shows loading screen while products are being loaded from Excel to database
 - **Responsive Design**: Bootstrap 5 with mobile-friendly interface
 
 ## 🏗️ Architecture
 
 - **Frontend**: Bootstrap 5, vanilla JavaScript, bilingual Jinja2 templates
 - **Backend**: Flask with Blueprint architecture
-- **Database**: Excel files (read-only) + Firebase Firestore (user data)
+- **Database**: PostgreSQL (products + user data + shopping lists)
 - **Services**: Modular service layer for business logic
-- **Caching**: In-memory Excel data caching for fast searches
+- **Data Loading**: Excel files loaded into PostgreSQL on app startup
 
 ## 📋 Requirements
 
 - Python 3.8+
 - Flask 2.3+
+- PostgreSQL database
 - pandas, openpyxl (Excel processing)
-- firebase-admin (optional, with mock fallback)
+- SQLAlchemy (PostgreSQL ORM)
 - Bootstrap 5 (CDN)
 
 ## 🚀 Quick Start
@@ -44,17 +45,27 @@ cp .env.example .env
 # Edit .env with your configuration
 ```
 
-### 3. Add Excel Data Files
+### 3. Setup Database
+```bash
+# Set up PostgreSQL database
+export DATABASE_URL="postgresql://username:password@localhost:5432/cable_tray_db"
+# or configure individual database settings in .env
+```
+
+### 4. Add Excel Data Files
 Place your Excel files in the `data/` directory:
 - `New shopping list.xlsx` - Product catalog
 - `Vered Price Table.xlsx` - Pricing data
 
-### 4. Run Application
+### 5. Run Application
 ```bash
 python run.py
 ```
 
-Visit http://localhost:5000
+The app will:
+1. Show loading screen while products are loaded from Excel to PostgreSQL
+2. Start accepting requests once loading is complete
+3. Visit http://localhost:5000
 
 ## 📁 Project Structure
 
@@ -84,9 +95,14 @@ solel-bone/
 FLASK_ENV=development
 SECRET_KEY=your-secret-key
 
-# Firebase (optional)
-FIREBASE_PROJECT_ID=your-project-id
-MOCK_FIREBASE=true  # Use mock Firebase for development
+# PostgreSQL Database
+DATABASE_URL=postgresql://username:password@localhost:5432/cable_tray_db
+# OR individual settings:
+DB_HOST=localhost
+DB_PORT=5432
+DB_NAME=cable_tray_db
+DB_USER=username
+DB_PASSWORD=password
 
 # Excel Files
 EXCEL_SHOPPING_LIST_PATH=data/New shopping list.xlsx
@@ -114,8 +130,9 @@ SESSION_TIMEOUT_HOURS=24
 - `עובי` - Thickness
 - `מחיר` - Price
 
-### Firebase Collections
+### PostgreSQL Tables
 - `users` - User profiles and authentication
+- `products` - Product catalog loaded from Excel files
 - `shopping_lists` - User shopping lists
 - `user_sessions` - Active user sessions
 

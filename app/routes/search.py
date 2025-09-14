@@ -3,6 +3,7 @@ Search routes for product search functionality.
 """
 
 import logging
+import json
 from flask import Blueprint, render_template, request, jsonify, current_app, session
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
@@ -19,7 +20,7 @@ def get_search_service() -> SearchService:
     if not hasattr(current_app, 'search_service') or current_app.search_service is None:
         if hasattr(current_app, 'database_service') and current_app.database_service:
             # Create search service with database
-            current_app.search_service = SearchService(current_app.excel_data, database_service=current_app.database_service)
+            current_app.search_service = SearchService(database_service=current_app.database_service)
         else:
             raise RuntimeError("Database service not available")
     return current_app.search_service
@@ -210,18 +211,58 @@ def product_details(product_id: str):
         
         # Get related products (same type) by filtering in-memory products list
         related_products = []
-        if product.specifications and product.specifications.type:
-            related_products = [
-                p for p in search_service.products
-                if (
-                    p.specifications is not None and
-                    p.specifications.type == product.specifications.type and
-                    p.menora_id != product.menora_id
+        
+        # Parse specifications from database data
+        specifications = product.get('specifications', {})
+        if isinstance(specifications, str):
+            try:
+                specifications = json.loads(specifications)
+            except json.JSONDecodeError:
+                specifications = {}
+        
+        # Parse dimensions from database data
+        dimensions = product.get('dimensions', {})
+        if isinstance(dimensions, str):
+            try:
+                dimensions = json.loads(dimensions)
+            except json.JSONDecodeError:
+                dimensions = {}
+        
+        product_type = specifications.get('type', '')
+        if product_type:
+            # Get related products from database
+            try:
+                related_results = search_service.database_service.execute_query(
+                    "SELECT * FROM products WHERE specifications::text LIKE :type_pattern AND menora_id != :product_id LIMIT 6",
+                    {
+                        "type_pattern": f'%"type":"{product_type}"%',
+                        "product_id": product_id
+                    }
                 )
-            ][:6]  # Limit to 6 related products
+                related_products = related_results
+            except Exception as e:
+                logger.error(f"Error getting related products: {str(e)}")
+                related_products = []
+        
+        # Parse specifications for template
+        parsed_specifications = {}
+        if specifications:
+            parsed_specifications = specifications
+        
+        # Parse pricing for template
+        parsed_pricing = {}
+        price = product.get('price')
+        if price and price > 0:
+            parsed_pricing = {
+                'base_price': float(price),
+                'currency': 'ILS'
+            }
         
         return render_template('product_detail.html', 
                              product=product,
+                             specifications=parsed_specifications,
+                             dimensions=dimensions,
+                             pricing=parsed_pricing,
                              related_products=related_products,
                              preferred_language=preferred_language)
         
@@ -246,7 +287,7 @@ def product_details_api(product_id: str):
         
         return jsonify({
             'success': True,
-            'data': product.to_dict()
+            'data': product  # product is already a dictionary from database
         })
         
     except Exception as e:

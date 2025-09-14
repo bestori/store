@@ -1,11 +1,7 @@
 {% extends "base.html" %}
 
 {% block title %}
-{% if session.get('preferred_language') == 'english' %}
-Login - Store
-{% else %}
 התחברות - חנות
-{% endif %}
 {% endblock %}
 
 {% block content %}
@@ -16,29 +12,17 @@ Login - Store
                 <div class="card-header bg-primary text-white text-center">
                     <h4 class="mb-0">
                         <i class="bi bi-box-arrow-in-right me-2"></i>
-                        {% if session.get('preferred_language') == 'english' %}
-                        Login
-                        {% else %}
                         התחברות
-                        {% endif %}
                     </h4>
                 </div>
                 <div class="card-body">
                     <div class="text-center mb-4">
                         <i class="bi bi-lightning-charge-fill text-primary" style="font-size: 3rem;"></i>
                         <h5 class="mt-2">
-                            {% if session.get('preferred_language') == 'english' %}
-                            Welcome to Store
-                            {% else %}
                             ברוכים הבאים לחנות
-                            {% endif %}
                         </h5>
                         <p class="text-muted">
-                            {% if session.get('preferred_language') == 'english' %}
-                            Enter your unique user code to access your shopping lists
-                            {% else %}
                             הזינו את קוד המשתמש הייחודי שלכם לגישה לרשימות הקניות
-                            {% endif %}
                         </p>
                     </div>
 
@@ -46,50 +30,28 @@ Login - Store
                         {% if config.WTF_CSRF_ENABLED %}<input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>{% endif %}
                         <div class="mb-3">
                             <label for="user_code" class="form-label">
-                                {% if session.get('preferred_language') == 'english' %}
-                                User Code
-                                {% else %}
                                 קוד משתמש
-                                {% endif %}
                                 <span class="text-danger">*</span>
                             </label>
                             <input type="text" class="form-control form-control-lg text-center" id="user_code"
                                 name="user_code" required maxlength="20" autocomplete="username"
-                                placeholder="{% if session.get('preferred_language') == 'english' %}Enter your code{% else %}הזינו את הקוד שלכם{% endif %}"
+                                placeholder="הזינו את הקוד שלכם"
                                 style="font-family: monospace; letter-spacing: 2px;">
                             <div class="form-text">
-                                {% if session.get('preferred_language') == 'english' %}
-                                3-20 characters, letters and numbers only
-                                {% else %}
                                 3-20 תווים, אותיות ומספרים בלבד
-                                {% endif %}
                             </div>
                         </div>
 
                         <div class="d-grid">
                             <button type="submit" class="btn btn-primary btn-lg" id="loginButton">
                                 <i class="bi bi-box-arrow-in-right me-2"></i>
-                                {% if session.get('preferred_language') == 'english' %}
-                                Login
-                                {% else %}
                                 התחבר
-                                {% endif %}
                             </button>
                         </div>
                     </form>
 
                     <hr class="my-4">
 
-                    <div class="text-center">
-                        <small class="text-muted">
-                            {% if session.get('preferred_language') == 'english' %}
-                            Don't have a code? Contact your administrator or simply enter a new code to create an
-                            account.
-                            {% else %}
-                            אין לכם קוד? צרו קשר עם המנהל או הזינו קוד חדש ליצירת חשבון.
-                            {% endif %}
-                        </small>
-                    </div>
                 </div>
             </div>
 
@@ -98,36 +60,20 @@ Login - Store
                 <div class="card-body">
                     <h6>
                         <i class="bi bi-info-circle me-2"></i>
-                        {% if session.get('preferred_language') == 'english' %}
-                        How it works
-                        {% else %}
                         איך זה עובד
-                        {% endif %}
                     </h6>
                     <ul class="list-unstyled mb-0">
                         <li class="mb-2">
                             <i class="bi bi-1-circle text-primary me-2"></i>
-                            {% if session.get('preferred_language') == 'english' %}
-                            Enter your unique user code
-                            {% else %}
                             הזינו את קוד המשתמש הייחודי שלכם
-                            {% endif %}
                         </li>
                         <li class="mb-2">
                             <i class="bi bi-2-circle text-primary me-2"></i>
-                            {% if session.get('preferred_language') == 'english' %}
-                            Search for cable tray products
-                            {% else %}
                             חפשו מוצרי מגשי כבלים
-                            {% endif %}
                         </li>
                         <li class="mb-0">
                             <i class="bi bi-3-circle text-primary me-2"></i>
-                            {% if session.get('preferred_language') == 'english' %}
-                            Create and manage shopping lists
-                            {% else %}
                             צרו ונהלו רשימות קניות
-                            {% endif %}
                         </li>
                     </ul>
                 </div>
@@ -157,14 +103,14 @@ Login - Store
 
             if (!userCode) {
                 e.preventDefault();
-                showAlert('{% if session.get("preferred_language") == "english" %}Please enter a user code.{% else %}אנא הזינו קוד משתמש.{% endif %}', 'warning');
+                showAlert('אנא הזינו קוד משתמש.', 'warning');
                 userCodeInput.focus();
                 return;
             }
 
             if (userCode.length < 3) {
                 e.preventDefault();
-                showAlert('{% if session.get("preferred_language") == "english" %}User code must be at least 3 characters long.{% else %}קוד המשתמש חייב להיות באורך של לפחות 3 תווים.{% endif %}', 'warning');
+                showAlert('קוד המשתמש חייב להיות באורך של לפחות 3 תווים.', 'warning');
                 userCodeInput.focus();
                 return;
             }

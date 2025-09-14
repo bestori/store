@@ -224,11 +224,21 @@ Product Search - Store
                                         <select class="form-select" id="filterType" name="type">
                                             <option value="">{% if session.get('preferred_language') == 'english' %}All
                                                 Types{% else %}כל הסוגים{% endif %}</option>
-                                            {% for option in filter_options.get('type', []) %}
-                                            {% if option is mapping %}
-                                            <option value="{{ option.value }}">{{ option.label }}</option>
+                                            {% for category in filter_options.get('categories', []) %}
+                                            {% if category == 'cable_tray' %}
+                                            <option value="{{ category }}">{% if session.get('preferred_language') == 'english' %}Cable Tray{% else %}סולמות כבלים{% endif %}</option>
+                                            {% elif category == 'connector' %}
+                                            <option value="{{ category }}">{% if session.get('preferred_language') == 'english' %}Connectors{% else %}מחברים{% endif %}</option>
+                                            {% elif category == 'support' %}
+                                            <option value="{{ category }}">{% if session.get('preferred_language') == 'english' %}Supports{% else %}תמיכות{% endif %}</option>
+                                            {% elif category == 'cover' %}
+                                            <option value="{{ category }}">{% if session.get('preferred_language') == 'english' %}Covers{% else %}מכסים{% endif %}</option>
+                                            {% elif category == 'trunking' %}
+                                            <option value="{{ category }}">{% if session.get('preferred_language') == 'english' %}Trunking{% else %}תעלות{% endif %}</option>
+                                            {% elif category == 'accessory' %}
+                                            <option value="{{ category }}">{% if session.get('preferred_language') == 'english' %}Accessories{% else %}אביזרים{% endif %}</option>
                                             {% else %}
-                                            <option value="{{ option }}">{{ option }}</option>
+                                            <option value="{{ category }}">{{ category }}</option>
                                             {% endif %}
                                             {% endfor %}
                                         </select>
@@ -244,7 +254,7 @@ Product Search - Store
                                         <select class="form-select" id="filterHeight" name="height">
                                             <option value="">{% if session.get('preferred_language') == 'english' %}All
                                                 Heights{% else %}כל הגבהים{% endif %}</option>
-                                            {% for option in filter_options.get('height', []) %}
+                                            {% for option in filter_options.get('heights', []) %}
                                             <option value="{{ option }}">{{ option }} mm</option>
                                             {% endfor %}
                                         </select>
@@ -260,7 +270,7 @@ Product Search - Store
                                         <select class="form-select" id="filterWidth" name="width">
                                             <option value="">{% if session.get('preferred_language') == 'english' %}All
                                                 Widths{% else %}כל הרוחבים{% endif %}</option>
-                                            {% for option in filter_options.get('width', []) %}
+                                            {% for option in filter_options.get('widths', []) %}
                                             <option value="{{ option }}">{{ option }} mm</option>
                                             {% endfor %}
                                         </select>
@@ -270,13 +280,13 @@ Product Search - Store
                                 <div class="col-md-6">
                                     <div class="filter-group">
                                         <h6>
-                                            {% if session.get('preferred_language') == 'english' %}Galvanization{% else
-                                            %}גלוון{% endif %}
+                                            {% if session.get('preferred_language') == 'english' %}Material{% else
+                                            %}חומר{% endif %}
                                         </h6>
-                                        <select class="form-select" id="filterGalvanization" name="galvanization">
+                                        <select class="form-select" id="filterMaterial" name="material">
                                             <option value="">{% if session.get('preferred_language') == 'english' %}All
-                                                Types{% else %}כל הסוגים{% endif %}</option>
-                                            {% for option in filter_options.get('galvanization', []) %}
+                                                Materials{% else %}כל החומרים{% endif %}</option>
+                                            {% for option in filter_options.get('materials', []) %}
                                             <option value="{{ option }}">{{ option }}</option>
                                             {% endfor %}
                                         </select>
@@ -485,6 +495,7 @@ Product Search - Store
                     // Debug: Show sample product structure
                     if (allProducts.length > 0) {
                         console.log('Sample product:', allProducts[0]);
+            console.log('Sample product specifications:', allProducts[0].specifications);
                     }
                 } else {
                     console.error('API Error:', data.error);
@@ -635,34 +646,50 @@ Product Search - Store
                 }
             }
 
+            // Debug: Log filters and products
+            console.log('Filter search - Filters:', filters);
+            console.log('Filter search - Total products:', allProducts.length);
+            
             // Filter products based on criteria
             const matchedProducts = allProducts.filter(product => {
                 // Check each filter
                 for (const [filterKey, filterValue] of Object.entries(filters)) {
-                    if (filterKey === 'type' && product.type) {
-                        if (product.type.toLowerCase() !== filterValue.toLowerCase()) {
+                    if (!filterValue) continue; // Skip empty filters
+                    
+                    if (filterKey === 'type') {
+                        if (!product.category || product.category.toLowerCase() !== filterValue.toLowerCase()) {
                             return false;
                         }
-                    } else if (filterKey === 'material' && product.material) {
-                        if (product.material.toLowerCase() !== filterValue.toLowerCase()) {
+                    } else if (filterKey === 'material') {
+                        if (!product.material || product.material.toLowerCase() !== filterValue.toLowerCase()) {
                             return false;
                         }
-                    } else if (filterKey === 'height' && product.height) {
-                        if (parseInt(product.height) !== parseInt(filterValue)) {
+                    } else if (filterKey === 'height') {
+                        if (!product.height || parseInt(product.height) !== parseInt(filterValue)) {
                             return false;
                         }
-                    } else if (filterKey === 'width' && product.width) {
-                        if (parseInt(product.width) !== parseInt(filterValue)) {
+                    } else if (filterKey === 'width') {
+                        if (!product.width || parseInt(product.width) !== parseInt(filterValue)) {
                             return false;
                         }
-                    } else if (filterKey === 'thickness' && product.thickness) {
-                        if (parseFloat(product.thickness) !== parseFloat(filterValue)) {
+                    } else if (filterKey === 'thickness') {
+                        if (!product.thickness || parseFloat(product.thickness) !== parseFloat(filterValue)) {
+                            return false;
+                        }
+                    } else if (filterKey === 'category') {
+                        if (!product.category || product.category.toLowerCase() !== filterValue.toLowerCase()) {
                             return false;
                         }
                     }
                 }
                 return true;
             });
+            
+            // Debug: Log matched products
+            console.log('Filter search - Matched products:', matchedProducts.length);
+            if (matchedProducts.length > 0) {
+                console.log('First matched product:', matchedProducts[0]);
+            }
 
             // Pagination-compatible structure expected by displayResults
             const limit = 20;
@@ -761,9 +788,22 @@ Product Search - Store
         // Create product card HTML
         function createProductCard(product) {
             const language = '{{ session.get("preferred_language", "hebrew") }}';
-            const description = language === 'english' ? (product.english || '') : (product.hebrew || '');
-            const rawPrice = (typeof product.price === 'number') ? product.price : null;
-            const price = (rawPrice !== null) ? `${rawPrice.toFixed(2)} ${product.currency || '₪'}` : 'N/A';
+            
+            // Show both languages in search results
+            const hebrewName = product.hebrew || '';
+            const englishName = product.english || '';
+            const description = hebrewName && englishName ? 
+                `${hebrewName}<br><small class="text-muted">${englishName}</small>` :
+                (hebrewName || englishName);
+            
+            // Fix pricing - check for both price formats
+            let rawPrice = null;
+            if (typeof product.price === 'number') {
+                rawPrice = product.price;
+            } else if (product.price && !isNaN(parseFloat(product.price))) {
+                rawPrice = parseFloat(product.price);
+            }
+            const price = (rawPrice !== null && rawPrice > 0) ? `${rawPrice.toFixed(2)} ₪` : 'Price on request';
 
             const specs = [];
             if (product.height) specs.push(`H: ${product.height}mm`);
@@ -789,10 +829,10 @@ Product Search - Store
                         </div>
                         <div class="d-flex justify-content-between align-items-end mt-3">
                             <div class="product-price">${price}</div>
-                            <button class="btn btn-success btn-sm add-to-list-btn" data-product-id="${productId}">
-                                <i class="bi bi-cart-plus"></i>
-                                {% if session.get('preferred_language') == 'english' %}Add{% else %}פרטים{% endif %}
-                            </button>
+                            <a href="/search/product/${productId}" class="btn btn-success btn-sm">
+                                <i class="bi bi-eye"></i>
+                                {% if session.get('preferred_language') == 'english' %}View Details{% else %}פרטים{% endif %}
+                            </a>
                         </div>
                     </div>
                 </div>
