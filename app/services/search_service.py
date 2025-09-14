@@ -80,18 +80,37 @@ class SearchService:
                 
                 execution_time = time.time() - start_time
                 
-                # Convert to SearchResult format
-                from app.models.search_result import SearchResult
-                result = SearchResult(
-                    products=paginated_results,
+                # Convert to SearchResult format - create simple Product-like objects
+                simple_products = []
+                for db_product in paginated_results:
+                    # Create a simple object that has to_dict method
+                    class SimpleProduct:
+                        def __init__(self, db_data):
+                            self.db_data = db_data
+                        def to_dict(self):
+                            return self.db_data
+                    simple_products.append(SimpleProduct(db_product))
+                
+                from app.models.search_result import SearchResult, SearchPagination, SearchInfo
+                
+                pagination = SearchPagination(
+                    total=len(db_results),
+                    limit=limit,
+                    offset=offset,
+                    has_more=len(db_results) > offset + limit
+                )
+                
+                search_info = SearchInfo(
                     query=query,
-                    total_results=len(db_results),
-                    results_shown=len(paginated_results),
                     execution_time=execution_time,
-                    page_number=offset // limit + 1 if limit > 0 else 1,
-                    total_pages=(len(db_results) + limit - 1) // limit if limit > 0 else 1,
-                    filters={},
-                    available_filters={}
+                    language=language,
+                    search_type="text"
+                )
+                
+                result = SearchResult(
+                    results=simple_products,
+                    pagination=pagination,
+                    search_info=search_info
                 )
                 
                 self.logger.info(f"Database search '{query}': {len(db_results)} results in {execution_time:.3f}s")
@@ -104,17 +123,31 @@ class SearchService:
         # Fallback: return empty result
         execution_time = time.time() - start_time
         from app.models.search_result import SearchResult
-        return SearchResult(
-            products=[],
-            query=query,
-            total_results=0,
-            results_shown=0,
-            execution_time=execution_time,
-            page_number=1,
-            total_pages=0,
-            filters={},
-            available_filters={}
-        )
+        return SearchResult.create_empty(query, execution_time, language)
+    
+    def filter_search(self, filters: Dict[str, Any], limit: int = 20, offset: int = 0) -> SearchResult:
+        """Perform filtered search - for now just return empty results."""
+        start_time = time.time()
+        execution_time = time.time() - start_time
+        from app.models.search_result import SearchResult
+        return SearchResult.create_empty(str(filters), execution_time, filters=filters)
+    
+    def combined_search(self, query: Optional[str] = None, filters: Optional[Dict[str, Any]] = None,
+                       language: Optional[str] = None, limit: int = 20, offset: int = 0) -> SearchResult:
+        """Perform combined search - for now just use text search."""
+        if query:
+            return self.text_search(query, language, limit, offset)
+        else:
+            return self.filter_search(filters or {}, limit, offset)
+    
+    def get_available_filters(self, language: str = 'hebrew') -> Dict[str, List[Any]]:
+        """Get available filter options."""
+        return {}
+    
+    def get_popular_searches(self) -> List[str]:
+        """Get popular search terms."""
+        return ["100", "תעלה", "cable", "tray"]
+
         product_count = len(self.products)
         if self.product_service:
             try:
