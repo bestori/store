@@ -174,24 +174,75 @@ def add_item_to_default_list():
         user = User.from_dict(user_data)
         logger.info(f"User object created: {user}")
         
-        # Get or create default list
-        if not user.default_list_id:
-            # Create a default list
-            default_list = shopping_list_service.create_shopping_list(
-                user=user,
-                list_name="Default List",
-                description="Default shopping list"
-            )
-            if not default_list:
-                return jsonify({'success': False, 'error': 'Failed to create default list'}), 500
-            list_id = default_list.list_id
-        else:
-            list_id = user.default_list_id
+        # Get or create default list - simplified approach
+        logger.info(f"User default_list_id: {user.default_list_id}")
+        logger.info(f"User active_lists: {user.active_lists}")
         
-        # Get shopping list
-        shopping_list = shopping_list_service.get_shopping_list(list_id, user)
-        if not shopping_list:
+        # Try to use existing list first
+        if user.default_list_id:
+            list_id = user.default_list_id
+            logger.info(f"Using default list ID: {list_id}")
+        elif user.active_lists:
+            # Use any existing active list
+            list_id = list(user.active_lists.keys())[0]
+            logger.info(f"Using first active list ID: {list_id}")
+        else:
+            # Create a simple default list directly in database
+            logger.info("No existing lists, creating minimal default list")
+            import uuid
+            from datetime import datetime
+            
+            list_id = str(uuid.uuid4())
+            
+            # Insert directly into database
+            try:
+                database_service = current_app.database_service
+                database_service.execute_query(
+                    """INSERT INTO shopping_lists 
+                       (list_id, user_id, list_name, description, created_at, updated_at) 
+                       VALUES (:list_id, :user_id, :list_name, :description, :created_at, :updated_at)""",
+                    {
+                        'list_id': list_id,
+                        'user_id': user.user_id,
+                        'list_name': 'My Shopping List',
+                        'description': 'Default shopping list',
+                        'created_at': datetime.utcnow(),
+                        'updated_at': datetime.utcnow()
+                    }
+                )
+                
+                # Update user to set this as default
+                user.add_shopping_list(list_id, set_as_default=True)
+                database_service.execute_query(
+                    "UPDATE users SET active_lists = :active_lists, default_list_id = :default_list_id WHERE user_id = :user_id",
+                    {
+                        'active_lists': str(user.active_lists),  # Convert to string for storage
+                        'default_list_id': list_id,
+                        'user_id': user.user_id
+                    }
+                )
+                
+                logger.info(f"Created minimal default list ID: {list_id}")
+                
+            except Exception as e:
+                logger.error(f"Failed to create minimal default list: {e}")
+                return jsonify({'success': False, 'error': f'Could not create shopping list: {str(e)}'}), 500
+        
+        # Instead of using complex shopping_list_service, just verify list exists
+        logger.info(f"Checking if shopping list exists: {list_id}")
+        
+        # Verify shopping list exists in database
+        database_service = current_app.database_service
+        list_check = database_service.execute_query(
+            "SELECT list_id, list_name FROM shopping_lists WHERE list_id = :list_id AND user_id = :user_id",
+            {'list_id': list_id, 'user_id': user.user_id}
+        )
+        
+        if not list_check:
+            logger.error(f"Shopping list not found in database for list_id: {list_id}")
             return jsonify({'success': False, 'error': 'Shopping list not found'}), 404
+        
+        logger.info(f"Shopping list verified: {list_check[0]['list_name']}")
         
         # Get form data
         menora_id = (request.json.get('menora_id') or '').strip()
@@ -214,32 +265,52 @@ def add_item_to_default_list():
                 'error': 'Invalid quantity'
             }), 400
         
-        # Add item to list
-        success = shopping_list_service.add_item_to_list(
-            shopping_list=shopping_list,
-            menora_id=menora_id,
-            quantity=quantity,
-            notes=notes
-        )
+        # Add item directly to database instead of using complex shopping_list_service
+        logger.info(f"Adding item to database - menora_id: {menora_id}, quantity: {quantity}")
         
-        if success:
-            logger.info(f"Item added successfully to shopping list")
-            # Get updated totals
-            totals = shopping_list_service.calculate_list_totals(shopping_list)
-            logger.info(f"Updated totals: {totals}")
+        try:
+            # Insert shopping list item directly
+            import uuid
+            from datetime import datetime
+            
+            item_id = str(uuid.uuid4())
+            
+            database_service.execute_query(
+                """INSERT INTO shopping_list_items 
+                   (item_id, list_id, menora_id, quantity, notes, added_at) 
+                   VALUES (:item_id, :list_id, :menora_id, :quantity, :notes, :added_at)""",
+                {
+                    'item_id': item_id,
+                    'list_id': list_id,
+                    'menora_id': menora_id,
+                    'quantity': quantity,
+                    'notes': notes,
+                    'added_at': datetime.utcnow()
+                }
+            )
+            
+            # Update shopping list timestamp
+            database_service.execute_query(
+                "UPDATE shopping_lists SET updated_at = :updated_at WHERE list_id = :list_id",
+                {'updated_at': datetime.utcnow(), 'list_id': list_id}
+            )
+            
+            logger.info(f"Item added successfully to database")
             logger.info(f"=== ADD TO CART DEBUG END - SUCCESS ===")
+            
             return jsonify({
                 'success': True,
                 'message': 'Item added to shopping list',
-                'totals': totals,
+                'item_id': item_id,
                 'redirect_url': '/shopping-list'
             })
-        else:
-            logger.error(f"Failed to add item to shopping list")
+            
+        except Exception as e:
+            logger.error(f"Failed to add item to database: {e}")
             logger.info(f"=== ADD TO CART DEBUG END - FAILURE ===")
             return jsonify({
                 'success': False,
-                'error': 'Failed to add item to list'
+                'error': f'Database error: {str(e)}'
             }), 500
         
     except Exception as e:
