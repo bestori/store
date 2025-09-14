@@ -167,9 +167,53 @@ def debug_database():
         # Get all users
         all_users = database_service.execute_query("SELECT user_id, user_code, preferences FROM users ORDER BY created_at DESC LIMIT 5")
         
+        # Get sample products to check structure
+        sample_products = database_service.execute_query("""
+            SELECT menora_id, name_hebrew, name_english, price, specifications
+            FROM products 
+            LIMIT 5
+        """)
+        
+        # Check for any products with image data in specifications
+        products_with_image_specs = database_service.execute_query("""
+            SELECT menora_id, name_hebrew, specifications->>'image_url' as image_url,
+                   specifications 
+            FROM products 
+            WHERE specifications ? 'image_url' 
+               OR specifications::text LIKE '%image%'
+            LIMIT 10
+        """)
+        
+        # Check if there's an images table or column
+        table_structure = database_service.execute_query("""
+            SELECT column_name, data_type 
+            FROM information_schema.columns 
+            WHERE table_name = 'products'
+            ORDER BY ordinal_position
+        """)
+        
+        # FOR TESTING: Add image URL to one product
+        test_update = database_service.execute_update("""
+            UPDATE products 
+            SET specifications = specifications || '{"image_url": "https://via.placeholder.com/200x150/0066cc/ffffff?text=Cable+Tray"}'::jsonb
+            WHERE menora_id = 'MEN-TCS-100-400-1.0'
+        """)
+        
+        # Get updated product with image
+        updated_product = database_service.execute_query("""
+            SELECT menora_id, name_hebrew, specifications->>'image_url' as image_url
+            FROM products 
+            WHERE menora_id = 'MEN-TCS-100-400-1.0'
+        """)
+        
         return jsonify({
             'all_shopping_lists': all_lists,
-            'all_users': all_users
+            'all_users': all_users,
+            'sample_products': sample_products,
+            'products_table_structure': table_structure,
+            'products_with_images': products_with_image_specs,
+            'test_image_added': test_update,
+            'updated_test_product': updated_product
         })
         
     except Exception as e:

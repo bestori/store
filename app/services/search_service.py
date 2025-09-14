@@ -175,7 +175,7 @@ class SearchService:
             query = "SELECT * FROM products"
             if where_conditions:
                 query += " WHERE " + " AND ".join(where_conditions)
-            query += " ORDER BY name_hebrew LIMIT :limit OFFSET :offset"
+            query += " ORDER BY name_hebrew, menora_id LIMIT :limit OFFSET :offset"
             
             params['limit'] = limit
             params['offset'] = offset

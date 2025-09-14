@@ -34,7 +34,7 @@ class ProductService:
         if not self.database_service.is_available():
             raise Exception("Database service not available")
         return self.database_service.execute_query(
-            "SELECT * FROM products ORDER BY name_hebrew LIMIT :limit",
+            "SELECT * FROM products ORDER BY name_hebrew, menora_id LIMIT :limit",
             {'limit': limit}
         )
     

@@ -222,7 +222,7 @@ class DatabaseService:
     
     def get_all_products(self) -> List[Dict[str, Any]]:
         """Get all products."""
-        return self.execute_query("SELECT * FROM products ORDER BY name_hebrew")
+        return self.execute_query("SELECT * FROM products ORDER BY name_hebrew, menora_id")
     
     def insert_product(self, product_data: Dict[str, Any]) -> bool:
         """Insert a product into the database."""
@@ -262,7 +262,7 @@ class DatabaseService:
             """SELECT * FROM products 
                WHERE name_hebrew ILIKE :query OR name_english ILIKE :query 
                OR menora_id ILIKE :query
-               ORDER BY name_hebrew 
+               ORDER BY name_hebrew, menora_id 
                LIMIT :limit""",
             {"query": f"%{query}%", "limit": limit}
         )
