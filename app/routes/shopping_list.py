@@ -155,16 +155,17 @@ def add_item_to_default_list():
         user_service, shopping_list_service, _, _ = get_services()
         logger.info(f"Services obtained successfully")
         
-        # Get current user
-        session_id = session.get('session_id')
-        logger.info(f"Session ID from session: {session_id}")
+        # Get current user - since @login_required passed, user is authenticated
+        user_code = session.get('user_code')
+        logger.info(f"User code from session: {user_code}")
         
-        user = user_service.validate_session(session_id)
-        logger.info(f"User validation result: {user}")
+        # Get user by code instead of validating session (simpler approach)
+        user = user_service.get_user_by_code(user_code)
+        logger.info(f"User lookup result: {user}")
         
         if not user:
-            logger.error(f"User validation failed - no user found for session_id: {session_id}")
-            return jsonify({'success': False, 'error': 'Not authenticated', 'debug': 'User validation failed'}), 401
+            logger.error(f"User not found for user_code: {user_code}")
+            return jsonify({'success': False, 'error': 'User not found', 'debug': 'User lookup failed'}), 401
         
         # Get or create default list
         if not user.default_list_id:

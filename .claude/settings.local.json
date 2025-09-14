@@ -11,7 +11,8 @@
       "Bash(./pushdeploy.sh)",
       "Bash(git add:*)",
       "Bash(git commit:*)",
-      "Bash(git push:*)"
+      "Bash(git push:*)",
+      "Bash(python test_cart_flow.py)"
     ],
     "deny": [],
     "ask": []
