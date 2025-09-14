@@ -31,18 +31,14 @@ class DatabaseService:
     def _initialize_database(self):
         """Initialize database connection."""
         try:
-            # Build database URL for Cloud SQL
-            db_user = 'postgres'
-            db_password = self.config.get('DB_PASSWORD', 'your_secure_password_here')
-            db_name = self.config.get('DB_NAME', 'solel-bone')
-            connection_name = self.config.get('CLOUD_SQL_CONNECTION_NAME', 'solel-bone:europe-west1:solel-bone-db')
+            # Check for Railway DATABASE_URL first
+            database_url = os.environ.get('DATABASE_URL')
             
-            # For Cloud Run, use Unix socket connection
-            if os.environ.get('GAE_ENV') or os.environ.get('GOOGLE_CLOUD_PROJECT'):
-                db_socket_dir = '/cloudsql'
-                database_url = f"postgresql://{db_user}:{db_password}@/{db_name}?host={db_socket_dir}/{connection_name}"
-            else:
-                # For local development
+            if not database_url:
+                # Fallback to individual config variables
+                db_user = self.config.get('DB_USER', 'postgres')
+                db_password = self.config.get('DB_PASSWORD', 'your_secure_password_here')
+                db_name = self.config.get('DB_NAME', 'railway')
                 db_host = self.config.get('DB_HOST', 'localhost')
                 db_port = self.config.get('DB_PORT', '5432')
                 database_url = f"postgresql://{db_user}:{db_password}@{db_host}:{db_port}/{db_name}"
