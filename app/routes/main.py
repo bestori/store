@@ -162,6 +162,73 @@ def health():
     return jsonify(status)
 
 
+@main_bp.route('/load-excel')
+def load_excel():
+    """Manually trigger Excel data loading into database."""
+    try:
+        if not hasattr(current_app, 'database_service') or not current_app.database_service:
+            return jsonify({'error': 'Database service not available'}), 500
+            
+        if not current_app.database_service.is_available():
+            return jsonify({'error': 'Database not connected'}), 500
+        
+        # Load Excel data
+        from app.services.excel_loader import ExcelLoader
+        
+        excel_loader = ExcelLoader(current_app.config)
+        excel_data = excel_loader.load_data()
+        
+        products = excel_data.get('products', [])
+        loaded_count = 0
+        
+        # Insert products into database
+        for product in products:
+            product_data = {
+                'menora_id': product.get('menora_id', ''),
+                'name_hebrew': product.get('name_hebrew', ''),
+                'name_english': product.get('name_english', ''),
+                'description_hebrew': product.get('description_hebrew', ''),
+                'description_english': product.get('description_english', ''),
+                'price': product.get('price', 0),
+                'category': product.get('category', ''),
+                'subcategory': product.get('subcategory', ''),
+                'specifications': product.get('specifications', {}),
+                'dimensions': product.get('dimensions', {}),
+                'weight': product.get('weight', 0),
+                'material': product.get('material', ''),
+                'coating': product.get('coating', ''),
+                'standard': product.get('standard', '')
+            }
+            
+            # Convert dict/list fields to JSON strings for PostgreSQL
+            import json
+            product_data['specifications'] = json.dumps(product_data['specifications'])
+            product_data['dimensions'] = json.dumps(product_data['dimensions'])
+            
+            if current_app.database_service.insert_product(product_data):
+                loaded_count += 1
+        
+        # Update excel_data status
+        current_app.excel_data['loaded'] = True
+        current_app.excel_data['loading'] = False
+        current_app.excel_data['syncing'] = False
+        
+        return jsonify({
+            'success': True,
+            'products_found': len(products),
+            'products_loaded': loaded_count,
+            'database_count': current_app.database_service.get_products_count()
+        })
+        
+    except Exception as e:
+        import traceback
+        return jsonify({
+            'success': False,
+            'error': str(e),
+            'traceback': traceback.format_exc()
+        }), 500
+
+
 @main_bp.route('/')
 def index():
     """Home page - show login for anonymous users, dashboard for authenticated users."""
