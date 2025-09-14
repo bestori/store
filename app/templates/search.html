@@ -1,0 +1,1019 @@
+{% extends "base.html" %}
+
+{% block title %}
+{% if session.get('preferred_language') == 'english' %}
+Product Search - Store
+{% else %}
+חיפוש מוצרים - חנות
+{% endif %}
+{% endblock %}
+
+{% block extra_css %}
+<style>
+    .search-container {
+        background: white;
+        border-radius: 0.5rem;
+        box-shadow: 0 0.125rem 0.25rem rgba(0, 0, 0, 0.075);
+        border: 1px solid rgba(0, 0, 0, 0.125);
+    }
+
+    .search-tabs .nav-link {
+        border: none;
+        background: transparent;
+        color: #6c757d;
+        font-weight: 500;
+    }
+
+    .search-tabs .nav-link.active {
+        color: #007bff;
+        border-bottom: 2px solid #007bff;
+        background: transparent;
+    }
+
+    .filter-group {
+        background: #f8f9fa;
+        border-radius: 0.375rem;
+        padding: 1rem;
+        margin-bottom: 1rem;
+    }
+
+    .product-card {
+        cursor: pointer;
+        transition: all 0.2s ease;
+        border: 1px solid #dee2e6;
+    }
+
+    .product-card:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.15);
+        border-color: #007bff;
+    }
+
+    .product-specs {
+        font-size: 0.875rem;
+        color: #6c757d;
+    }
+
+    .product-price {
+        font-size: 1.25rem;
+        font-weight: bold;
+        color: #28a745;
+    }
+
+    .search-results-header {
+        border-bottom: 1px solid #dee2e6;
+        padding-bottom: 1rem;
+        margin-bottom: 1.5rem;
+    }
+
+    .pagination-wrapper {
+        display: flex;
+        justify-content: center;
+        margin-top: 2rem;
+    }
+
+    .loading-overlay {
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: rgba(255, 255, 255, 0.8);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        z-index: 10;
+    }
+
+    .suggestions-dropdown {
+        position: absolute;
+        top: 100%;
+        left: 0;
+        right: 0;
+        background: white;
+        border: 1px solid #dee2e6;
+        border-top: none;
+        border-radius: 0 0 0.375rem 0.375rem;
+        box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.15);
+        z-index: 1000;
+        max-height: 200px;
+        overflow-y: auto;
+    }
+
+    .suggestion-item {
+        padding: 0.5rem 1rem;
+        cursor: pointer;
+        border-bottom: 1px solid #f8f9fa;
+    }
+
+    .suggestion-item:hover,
+    .suggestion-item.active {
+        background: #f8f9fa;
+    }
+
+    .popular-searches .badge {
+        cursor: pointer;
+        margin: 0.25rem;
+        transition: all 0.2s ease;
+    }
+
+    .popular-searches .badge:hover {
+        transform: scale(1.05);
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container">
+    <!-- Page Header -->
+    <div class="row mb-4">
+        <div class="col">
+            <h1 class="h2">
+                <i class="bi bi-search me-2"></i>
+                {% if session.get('preferred_language') == 'english' %}
+                Product Search
+                {% else %}
+                חיפוש מוצרים
+                {% endif %}
+            </h1>
+            <p class="text-muted">
+                {% if session.get('preferred_language') == 'english' %}
+                Search our comprehensive catalog of cable tray products
+                {% else %}
+                חפשו בקטלוג הכולל של מוצרי מגשי כבלים
+                {% endif %}
+            </p>
+        </div>
+    </div>
+
+    <!-- Search Interface -->
+    <div class="row">
+        <div class="col-lg-12">
+            <div class="search-container p-4">
+                <!-- Search Tabs -->
+                <ul class="nav nav-tabs search-tabs mb-4" id="searchTabs">
+                    <li class="nav-item">
+                        <a class="nav-link active" id="text-search-tab" data-bs-toggle="tab" href="#text-search">
+                            <i class="bi bi-chat-text me-2"></i>
+                            {% if session.get('preferred_language') == 'english' %}
+                            Text Search
+                            {% else %}
+                            חיפוש טקסט
+                            {% endif %}
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" id="filter-search-tab" data-bs-toggle="tab" href="#filter-search">
+                            <i class="bi bi-funnel me-2"></i>
+                            {% if session.get('preferred_language') == 'english' %}
+                            Filter Search
+                            {% else %}
+                            חיפוש מסונן
+                            {% endif %}
+                        </a>
+                    </li>
+                </ul>
+
+                <!-- Tab Content -->
+                <div class="tab-content" id="searchTabContent">
+                    <!-- Text Search Tab -->
+                    <div class="tab-pane fade show active" id="text-search">
+                        <form id="textSearchForm">
+                            <div class="position-relative">
+                                <div class="input-group input-group-lg">
+                                    <input type="text" class="form-control" id="searchQuery"
+                                        placeholder="{% if session.get('preferred_language') == 'english' %}Search products... (e.g., cable tray, TCS, connectors){% else %}חפשו מוצרים... (למשל: מגש כבלים, TCS, מחברים){% endif %}"
+                                        autocomplete="off">
+                                    <button class="btn btn-primary" type="submit">
+                                        <i class="bi bi-search"></i>
+                                        {% if session.get('preferred_language') == 'english' %}Search{% else %}חפש{%
+                                        endif %}
+                                    </button>
+                                </div>
+
+                                <!-- Search Suggestions -->
+                                <div class="suggestions-dropdown" id="suggestionsDropdown" style="display: none;"></div>
+                            </div>
+                        </form>
+
+                        <!-- Popular Searches -->
+                        <div class="popular-searches mt-3">
+                            <small class="text-muted">
+                                {% if session.get('preferred_language') == 'english' %}Popular searches:{% else
+                                %}חיפושים פופולריים:{% endif %}
+                            </small>
+                            <div class="mt-2">
+                                {% for term in popular_searches %}
+                                <span class="badge bg-light text-dark popular-search-term" data-term="{{ term }}">{{
+                                    term }}</span>
+                                {% endfor %}
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Filter Search Tab -->
+                    <div class="tab-pane fade" id="filter-search">
+                        <form id="filterSearchForm">
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <div class="filter-group">
+                                        <h6>
+                                            {% if session.get('preferred_language') == 'english' %}Product Type{% else
+                                            %}סוג מוצר{% endif %}
+                                        </h6>
+                                        <select class="form-select" id="filterType" name="type">
+                                            <option value="">{% if session.get('preferred_language') == 'english' %}All
+                                                Types{% else %}כל הסוגים{% endif %}</option>
+                                            {% for option in filter_options.get('type', []) %}
+                                            {% if option is mapping %}
+                                            <option value="{{ option.value }}">{{ option.label }}</option>
+                                            {% else %}
+                                            <option value="{{ option }}">{{ option }}</option>
+                                            {% endif %}
+                                            {% endfor %}
+                                        </select>
+                                    </div>
+                                </div>
+
+                                <div class="col-md-6">
+                                    <div class="filter-group">
+                                        <h6>
+                                            {% if session.get('preferred_language') == 'english' %}Height (mm){% else
+                                            %}גובה (מ"מ){% endif %}
+                                        </h6>
+                                        <select class="form-select" id="filterHeight" name="height">
+                                            <option value="">{% if session.get('preferred_language') == 'english' %}All
+                                                Heights{% else %}כל הגבהים{% endif %}</option>
+                                            {% for option in filter_options.get('height', []) %}
+                                            <option value="{{ option }}">{{ option }} mm</option>
+                                            {% endfor %}
+                                        </select>
+                                    </div>
+                                </div>
+
+                                <div class="col-md-6">
+                                    <div class="filter-group">
+                                        <h6>
+                                            {% if session.get('preferred_language') == 'english' %}Width (mm){% else
+                                            %}רוחב (מ"מ){% endif %}
+                                        </h6>
+                                        <select class="form-select" id="filterWidth" name="width">
+                                            <option value="">{% if session.get('preferred_language') == 'english' %}All
+                                                Widths{% else %}כל הרוחבים{% endif %}</option>
+                                            {% for option in filter_options.get('width', []) %}
+                                            <option value="{{ option }}">{{ option }} mm</option>
+                                            {% endfor %}
+                                        </select>
+                                    </div>
+                                </div>
+
+                                <div class="col-md-6">
+                                    <div class="filter-group">
+                                        <h6>
+                                            {% if session.get('preferred_language') == 'english' %}Galvanization{% else
+                                            %}גלוון{% endif %}
+                                        </h6>
+                                        <select class="form-select" id="filterGalvanization" name="galvanization">
+                                            <option value="">{% if session.get('preferred_language') == 'english' %}All
+                                                Types{% else %}כל הסוגים{% endif %}</option>
+                                            {% for option in filter_options.get('galvanization', []) %}
+                                            <option value="{{ option }}">{{ option }}</option>
+                                            {% endfor %}
+                                        </select>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="text-center">
+                                <button type="submit" class="btn btn-primary btn-lg">
+                                    <i class="bi bi-funnel me-2"></i>
+                                    {% if session.get('preferred_language') == 'english' %}Apply Filters{% else %}החל
+                                    מסננים{% endif %}
+                                </button>
+                                <button type="button" class="btn btn-outline-secondary btn-lg ms-2" id="clearFilters">
+                                    <i class="bi bi-x-circle me-2"></i>
+                                    {% if session.get('preferred_language') == 'english' %}Clear{% else %}נקה{% endif %}
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Search Results -->
+    <div class="row mt-4">
+        <div class="col">
+            <div id="searchResults" style="display: none;">
+                <!-- Results Header -->
+                <div class="search-results-header">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <h5 id="resultsTitle">
+                                {% if session.get('preferred_language') == 'english' %}Search Results{% else %}תוצאות
+                                חיפוש{% endif %}
+                            </h5>
+                            <small class="text-muted" id="resultsInfo">
+                                {% if session.get('preferred_language') == 'english' %}Found 0 products{% else %}נמצאו 0
+                                מוצרים{% endif %}
+                            </small>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Results Container -->
+                <div id="resultsContainer" class="position-relative">
+                    <div class="loading-overlay" id="loadingOverlay" style="display: none;">
+                        <div class="spinner-border text-primary" role="status">
+                            <span class="visually-hidden">Loading...</span>
+                        </div>
+                    </div>
+
+                    <div class="row" id="productGrid">
+                        <!-- Products will be loaded here -->
+                    </div>
+                </div>
+
+                <!-- Pagination -->
+                <div class="pagination-wrapper">
+                    <nav>
+                        <ul class="pagination" id="paginationNav">
+                            <!-- Pagination will be loaded here -->
+                        </ul>
+                    </nav>
+                </div>
+            </div>
+
+            <!-- Empty State -->
+            <div id="emptyState" class="text-center py-5" style="display: none;">
+                <i class="bi bi-search" style="font-size: 4rem; color: #dee2e6;"></i>
+                <h4 class="mt-3 text-muted">
+                    {% if session.get('preferred_language') == 'english' %}No products found{% else %}לא נמצאו מוצרים{%
+                    endif %}
+                </h4>
+                <p class="text-muted">
+                    {% if session.get('preferred_language') == 'english' %}
+                    Try adjusting your search terms or filters
+                    {% else %}
+                    נסו לשנות את מונחי החיפוש או המסננים
+                    {% endif %}
+                </p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Product Detail Modal -->
+<div class="modal fade" id="productModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">
+                    {% if session.get('preferred_language') == 'english' %}Product Details{% else %}פרטי מוצר{% endif %}
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body" id="productModalContent">
+                <!-- Product details will be loaded here -->
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+                    {% if session.get('preferred_language') == 'english' %}Close{% else %}סגור{% endif %}
+                </button>
+                <button type="button" class="btn btn-success" id="addToListButton">
+                    <i class="bi bi-cart-plus me-2"></i>
+                    {% if session.get('preferred_language') == 'english' %}Add to Shopping List{% else %}הוסף לרשימת
+                    קניות{% endif %}
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    document.addEventListener('DOMContentLoaded', function () {
+        const searchQuery = document.getElementById('searchQuery');
+        const suggestionsDropdown = document.getElementById('suggestionsDropdown');
+        const textSearchForm = document.getElementById('textSearchForm');
+        const filterSearchForm = document.getElementById('filterSearchForm');
+        const searchResults = document.getElementById('searchResults');
+        const emptyState = document.getElementById('emptyState');
+        const productGrid = document.getElementById('productGrid');
+        const loadingOverlay = document.getElementById('loadingOverlay');
+        const productModal = new bootstrap.Modal(document.getElementById('productModal'));
+
+        let currentSearchData = null;
+        let suggestionTimeout = null;
+        let allProducts = [];
+        let isProductsLoaded = false;
+
+        // Load all products on page load for client-side search
+        loadAllProducts();
+
+        // Temporarily disable progressive image loading to fix search
+        // startImageProgressiveLoading();
+
+        // Text search functionality
+        textSearchForm.addEventListener('submit', function (e) {
+            e.preventDefault();
+            const query = searchQuery.value.trim();
+            if (query) {
+                performTextSearch(query);
+            }
+        });
+
+        // Filter search functionality
+        filterSearchForm.addEventListener('submit', function (e) {
+            e.preventDefault();
+            performFilterSearch();
+        });
+
+        // Clear filters
+        document.getElementById('clearFilters').addEventListener('click', function () {
+            filterSearchForm.reset();
+            hideResults();
+        });
+
+        // Search suggestions
+        searchQuery.addEventListener('input', function (e) {
+            const query = e.target.value.trim();
+
+            clearTimeout(suggestionTimeout);
+
+            if (query.length >= 2) {
+                suggestionTimeout = setTimeout(() => {
+                    fetchSuggestions(query);
+                }, 300);
+            } else {
+                hideSuggestions();
+            }
+        });
+
+        // Hide suggestions when clicking outside
+        document.addEventListener('click', function (e) {
+            if (!searchQuery.contains(e.target) && !suggestionsDropdown.contains(e.target)) {
+                hideSuggestions();
+            }
+        });
+
+        // Popular search terms
+        document.querySelectorAll('.popular-search-term').forEach(term => {
+            term.addEventListener('click', function () {
+                const searchTerm = this.getAttribute('data-term');
+                searchQuery.value = searchTerm;
+                performTextSearch(searchTerm);
+            });
+        });
+
+        // Load all products for client-side search
+        async function loadAllProducts() {
+            if (isProductsLoaded) return;
+
+            try {
+                showLoading();
+                const response = await fetch('/api/v1/products');
+                const data = await response.json();
+
+                if (data.success) {
+                    allProducts = data.data.products;
+                    isProductsLoaded = true;
+                    console.log(`Loaded ${allProducts.length} products for client-side search`);
+
+                    // Debug: Show sample product structure
+                    if (allProducts.length > 0) {
+                        console.log('Sample product:', allProducts[0]);
+                    }
+                } else {
+                    console.error('API Error:', data.error);
+                    throw new Error(data.error || 'Failed to load products');
+                }
+            } catch (error) {
+                console.error('Error loading products:', error);
+                showError('{% if session.get("preferred_language") == "english" %}Failed to load products{% else %}טעינת המוצרים נכשלה{% endif %}');
+            } finally {
+                hideLoading();
+            }
+        }
+
+        // Client-side text search
+        function performTextSearch(query, offset = 0) {
+            const searchButton = document.querySelector('#textSearchForm button[type="submit"]');
+            if (searchButton) setButtonLoading(searchButton, true);
+
+            try {
+                // Wait for products to load if not already loaded
+                if (!isProductsLoaded) {
+                    loadAllProducts().then(() => {
+                        performClientSideTextSearch(query, offset);
+                    });
+                    return;
+                }
+
+                performClientSideTextSearch(query, offset);
+            } finally {
+                setTimeout(() => {
+                    const searchButton = document.querySelector('#textSearchForm button[type="submit"]');
+                    if (searchButton) setButtonLoading(searchButton, false);
+                }, 50); // Small delay to show loading state
+            }
+        }
+
+        // Perform client-side text search
+        function performClientSideTextSearch(query, offset = 0) {
+            const queryTrimmed = query.trim();
+            const queryLower = queryTrimmed.toLowerCase();
+
+            // Normalize Hebrew by removing niqqud/diacritics to improve matching
+            const stripHebrewDiacritics = (s) => (s || '').normalize('NFKD').replace(/[\u0591-\u05BD\u05BF\u05C1-\u05C2\u05C4-\u05C5\u05C7]/g, '');
+            const queryHebrewNormalized = stripHebrewDiacritics(queryTrimmed);
+
+            console.log(`Searching (bilingual) for: "${queryTrimmed}", total products: ${allProducts.length}`);
+
+            // Simple Hebrew → English synonym bridging for client-side search
+            const synonymMap = {
+                'כבל': ['cable', 'cable tray', 'tray'],
+                'כבלים': ['cable', 'cable tray', 'tray'],
+                'מגש': ['tray', 'cable tray']
+            };
+            const additionalTerms = Object.keys(synonymMap)
+                .filter(h => queryTrimmed.includes(h))
+                .flatMap(h => synonymMap[h]);
+            const englishTermsToMatch = new Set([queryLower, ...additionalTerms.map(t => t.toLowerCase())]);
+
+            // Bilingual: always match both Hebrew (case-sensitive) and English (case-insensitive)
+            const matchedProducts = allProducts.filter(product => {
+                try {
+                    const hebrew = product.hebrew || '';
+                    const english = product.english || '';
+                    const id = product.id || '';
+
+                    const englishLower = english.toLowerCase();
+                    const hebrewNormalized = stripHebrewDiacritics(hebrew);
+
+                    // Match if Hebrew contains the typed query OR any mapped English synonym appears
+                    const englishMatch = Array.from(englishTermsToMatch).some(term => englishLower.includes(term));
+                    const hebrewMatch = hebrew.includes(queryTrimmed) || hebrewNormalized.includes(queryHebrewNormalized);
+
+                    return (
+                        hebrewMatch ||
+                        englishMatch ||
+                        id.toLowerCase().includes(queryLower)
+                    );
+                } catch (error) {
+                    console.error('Error filtering product:', product, error);
+                    return false;
+                }
+            });
+
+            console.log(`Found ${matchedProducts.length} matches for "${queryTrimmed}"`);
+
+            // Sort so priced items appear first (then by ascending price)
+            matchedProducts.sort((a, b) => {
+                const aHas = typeof a.price === 'number';
+                const bHas = typeof b.price === 'number';
+                if (aHas !== bHas) return aHas ? -1 : 1;
+                if (aHas && bHas) return (a.price ?? 0) - (b.price ?? 0);
+                return 0;
+            });
+
+            // Pagination-compatible structure expected by displayResults
+            const limit = 20;
+            const paginatedResults = matchedProducts.slice(offset, offset + limit);
+            const searchResultData = {
+                results: paginatedResults,
+                pagination: {
+                    total: matchedProducts.length,
+                    limit: limit,
+                    offset: offset,
+                    hasMore: offset + limit < matchedProducts.length
+                },
+                searchInfo: {
+                    query: queryTrimmed,
+                    executionTime: 0.01,
+                    language: 'both',
+                    filters: null,
+                    searchType: 'text'
+                }
+            };
+            displayResults(searchResultData);
+        }
+
+        // Client-side filter search
+        function performFilterSearch(offset = 0) {
+            const filterButton = document.querySelector('#filterSearchForm button[type="submit"]');
+            if (filterButton) setButtonLoading(filterButton, true);
+
+            try {
+                // Wait for products to load if not already loaded
+                if (!isProductsLoaded) {
+                    loadAllProducts().then(() => {
+                        performClientSideFilterSearch(offset);
+                    });
+                    return;
+                }
+
+                performClientSideFilterSearch(offset);
+            } finally {
+                setTimeout(() => {
+                    const filterButton = document.querySelector('#filterSearchForm button[type="submit"]');
+                    if (filterButton) setButtonLoading(filterButton, false);
+                }, 50);
+            }
+        }
+
+        // Perform client-side filter search
+        function performClientSideFilterSearch(offset = 0) {
+            const formData = new FormData(filterSearchForm);
+            const filters = {};
+
+            for (const [key, value] of formData.entries()) {
+                if (value) {
+                    filters[key] = value;
+                }
+            }
+
+            // Filter products based on criteria
+            const matchedProducts = allProducts.filter(product => {
+                // Check each filter
+                for (const [filterKey, filterValue] of Object.entries(filters)) {
+                    if (filterKey === 'type' && product.type) {
+                        if (product.type.toLowerCase() !== filterValue.toLowerCase()) {
+                            return false;
+                        }
+                    } else if (filterKey === 'material' && product.material) {
+                        if (product.material.toLowerCase() !== filterValue.toLowerCase()) {
+                            return false;
+                        }
+                    } else if (filterKey === 'height' && product.height) {
+                        if (parseInt(product.height) !== parseInt(filterValue)) {
+                            return false;
+                        }
+                    } else if (filterKey === 'width' && product.width) {
+                        if (parseInt(product.width) !== parseInt(filterValue)) {
+                            return false;
+                        }
+                    } else if (filterKey === 'thickness' && product.thickness) {
+                        if (parseFloat(product.thickness) !== parseFloat(filterValue)) {
+                            return false;
+                        }
+                    }
+                }
+                return true;
+            });
+
+            // Pagination-compatible structure expected by displayResults
+            const limit = 20;
+            const paginatedResults = matchedProducts.slice(offset, offset + limit);
+            const searchResultData = {
+                results: paginatedResults,
+                pagination: {
+                    total: matchedProducts.length,
+                    limit: limit,
+                    offset: offset,
+                    hasMore: offset + limit < matchedProducts.length
+                },
+                searchInfo: {
+                    query: 'Filter Search',
+                    executionTime: 0.01,
+                    language: '{{ session.get("preferred_language", "hebrew") }}',
+                    filters: filters,
+                    searchType: 'filter'
+                }
+            };
+            displayResults(searchResultData);
+        }
+
+        // Fetch search suggestions
+        function fetchSuggestions(query) {
+            // Omit language to let backend treat as bilingual
+            fetch(`/search/suggest?q=${encodeURIComponent(query)}`)
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success && data.data.suggestions.length > 0) {
+                        showSuggestions(data.data.suggestions);
+                    } else {
+                        // Fallback suggestion for common Hebrew synonym
+                        const q = String(query || '').trim();
+                        if (q.includes('כבל') || q.includes('כבלים')) {
+                            showSuggestions(['מגש כבלים', 'cable tray']);
+                        } else {
+                            hideSuggestions();
+                        }
+                    }
+                })
+                .catch(error => {
+                    console.error('Suggestions error:', error);
+                    hideSuggestions();
+                });
+        }
+
+        // Display search suggestions
+        function showSuggestions(suggestions) {
+            const html = suggestions.map(suggestion =>
+                `<div class="suggestion-item" data-suggestion="${suggestion}">${suggestion}</div>`
+            ).join('');
+
+            suggestionsDropdown.innerHTML = html;
+            suggestionsDropdown.style.display = 'block';
+
+            // Add click handlers
+            suggestionsDropdown.querySelectorAll('.suggestion-item').forEach(item => {
+                item.addEventListener('click', function () {
+                    const suggestion = this.getAttribute('data-suggestion');
+                    searchQuery.value = suggestion;
+                    hideSuggestions();
+                    performTextSearch(suggestion);
+                });
+            });
+        }
+
+        // Hide suggestions
+        function hideSuggestions() {
+            suggestionsDropdown.style.display = 'none';
+        }
+
+        // Display search results
+        function displayResults(data) {
+            currentSearchData = data;
+
+            if (data.results && data.results.length > 0) {
+                // Update results info
+                document.getElementById('resultsInfo').textContent =
+                    `{% if session.get("preferred_language") == "english" %}Found ${data.pagination.total} products{% else %}נמצאו ${data.pagination.total} מוצרים{% endif %}`;
+
+                // Generate product cards HTML
+                const productsHtml = data.results.map(product => createProductCard(product)).join('');
+                productGrid.innerHTML = productsHtml;
+
+                // Generate pagination
+                generatePagination(data.pagination);
+
+                // Show results
+                showResults();
+            } else {
+                showEmptyState();
+            }
+        }
+
+        // Create product card HTML
+        function createProductCard(product) {
+            const language = '{{ session.get("preferred_language", "hebrew") }}';
+            const description = language === 'english' ? (product.english || '') : (product.hebrew || '');
+            const rawPrice = (typeof product.price === 'number') ? product.price : null;
+            const price = (rawPrice !== null) ? `${rawPrice.toFixed(2)} ${product.currency || '₪'}` : 'N/A';
+
+            const specs = [];
+            if (product.height) specs.push(`H: ${product.height}mm`);
+            if (product.width) specs.push(`W: ${product.width}mm`);
+            if (product.thickness) specs.push(`T: ${product.thickness}mm`);
+            const specsHtml = specs.join(' | ');
+
+            const imageHtml = (product.image_url && product.image_url !== 'undefined' && product.image_url !== null) ?
+                `<img src="${product.image_url}" alt="${description}" class="card-img-top" style="height: 150px; object-fit: cover;">` :
+                '';
+
+            const productId = product.id || product.menora_id || '';
+
+            return `
+            <div class="col-md-6 col-lg-4 mb-3">
+                <div class="card product-card h-100" data-product-id="${productId}">
+                    ${imageHtml}
+                    <div class="card-body">
+                        <h6 class="card-title text-primary">${productId}</h6>
+                        <p class="card-text">${description}</p>
+                        <div class="product-specs">
+                            <small class="text-muted">${specsHtml}</small>
+                        </div>
+                        <div class="d-flex justify-content-between align-items-end mt-3">
+                            <div class="product-price">${price}</div>
+                            <button class="btn btn-success btn-sm add-to-list-btn" data-product-id="${productId}">
+                                <i class="bi bi-cart-plus"></i>
+                                {% if session.get('preferred_language') == 'english' %}Add{% else %}פרטים{% endif %}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+        }
+
+        // Generate pagination HTML
+        function generatePagination(pagination) {
+            const paginationNav = document.getElementById('paginationNav');
+
+            if (pagination.total <= pagination.limit) {
+                paginationNav.innerHTML = '';
+                return;
+            }
+
+            const totalPages = Math.ceil(pagination.total / pagination.limit);
+            const currentPage = Math.floor(pagination.offset / pagination.limit) + 1;
+
+            let html = '';
+
+            // Previous button
+            if (currentPage > 1) {
+                html += `<li class="page-item"><a class="page-link" href="#" data-page="${currentPage - 1}">{% if session.get('preferred_language') == 'english' %}Previous{% else %}קודם{% endif %}</a></li>`;
+            }
+
+            // Page numbers
+            for (let i = Math.max(1, currentPage - 2); i <= Math.min(totalPages, currentPage + 2); i++) {
+                const active = i === currentPage ? 'active' : '';
+                html += `<li class="page-item ${active}"><a class="page-link" href="#" data-page="${i}">${i}</a></li>`;
+            }
+
+            // Next button
+            if (currentPage < totalPages) {
+                html += `<li class="page-item"><a class="page-link" href="#" data-page="${currentPage + 1}">{% if session.get('preferred_language') == 'english' %}Next{% else %}הבא{% endif %}</a></li>`;
+            }
+
+            paginationNav.innerHTML = html;
+
+            // Add click handlers
+            paginationNav.querySelectorAll('.page-link').forEach(link => {
+                link.addEventListener('click', function (e) {
+                    e.preventDefault();
+                    const page = parseInt(this.getAttribute('data-page'));
+                    const offset = (page - 1) * pagination.limit;
+
+                    // Repeat last search with new offset
+                    if (currentSearchData.searchInfo.searchType === 'text') {
+                        performTextSearch(currentSearchData.searchInfo.query, offset);
+                    } else {
+                        performFilterSearch(offset);
+                    }
+                });
+            });
+        }
+
+        // Event delegation for product cards and add buttons
+        productGrid.addEventListener('click', function (e) {
+            if (e.target.closest('.add-to-list-btn')) {
+                e.stopPropagation();
+                const productId = e.target.closest('.add-to-list-btn').getAttribute('data-product-id');
+                addToShoppingList(productId);
+            } else if (e.target.closest('.product-card')) {
+                const productId = e.target.closest('.product-card').getAttribute('data-product-id');
+                // Navigate to product details page
+                window.location.href = `/search/product/${productId}`;
+            }
+        });
+
+        // Show product details in modal
+        function showProductDetails(productId) {
+            // This would fetch and show product details
+            // For now, just show a placeholder
+            document.getElementById('productModalContent').innerHTML = `
+            <div class="text-center py-4">
+                <div class="spinner-border" role="status">
+                    <span class="visually-hidden">Loading...</span>
+                </div>
+            </div>
+        `;
+
+            productModal.show();
+
+            // TODO: Implement actual product details fetching
+        }
+
+        // Add product to shopping list
+        function addToShoppingList(productId) {
+            const button = document.querySelector(`[data-product-id="${productId}"].add-to-list-btn`);
+            if (button) setButtonLoading(button, true);
+
+            // Add to cart via API
+            makeRequest('/shopping-list/add-item', {
+                method: 'POST',
+                body: JSON.stringify({
+                    menora_id: productId,
+                    quantity: 1
+                })
+            })
+                .then(data => {
+                    if (data.success) {
+                        showAlert('{% if session.get("preferred_language") == "english" %}Product added to shopping list!{% else %}המוצר נוסף לרשימת הקניות!{% endif %}', 'success');
+                    } else {
+                        showAlert(data.error || '{% if session.get("preferred_language") == "english" %}Failed to add product{% else %}נכשל בהוספת המוצר{% endif %}', 'danger');
+                    }
+                })
+                .catch(error => {
+                    console.error('Add to cart error:', error);
+                    showAlert('{% if session.get("preferred_language") == "english" %}Failed to add product{% else %}נכשל בהוספת המוצר{% endif %}', 'danger');
+                })
+                .finally(() => {
+                    if (button) setButtonLoading(button, false);
+                });
+        }
+
+        // Utility functions
+        function showLoading() {
+            loadingOverlay.style.display = 'flex';
+        }
+
+        function hideLoading() {
+            loadingOverlay.style.display = 'none';
+        }
+
+        function showResults() {
+            searchResults.style.display = 'block';
+            emptyState.style.display = 'none';
+        }
+
+        function showEmptyState() {
+            searchResults.style.display = 'none';
+            emptyState.style.display = 'block';
+        }
+
+        function hideResults() {
+            searchResults.style.display = 'none';
+            emptyState.style.display = 'none';
+        }
+
+        function showError(message) {
+            showAlert(message, 'danger');
+            showEmptyState();
+        }
+    });
+
+    // Progressive Image Loading
+    let imageCheckInterval = null;
+    let imagesFullyLoaded = false;
+
+    function startImageProgressiveLoading() {
+        // Check image status every 2 seconds
+        imageCheckInterval = setInterval(checkImageStatus, 2000);
+
+        // Also check immediately
+        checkImageStatus();
+    }
+
+    async function checkImageStatus() {
+        try {
+            const response = await fetch('/api/v1/images/status');
+            const data = await response.json();
+
+            if (data.success && data.data.images_loaded && !imagesFullyLoaded) {
+                imagesFullyLoaded = true;
+                console.log(`Background image loading complete: ${data.data.total_images} images loaded`);
+
+                // Clear interval
+                if (imageCheckInterval) {
+                    clearInterval(imageCheckInterval);
+                    imageCheckInterval = null;
+                }
+
+                // Refresh products data to get updated image URLs
+                await refreshProductImages();
+
+                // Update any currently displayed search results
+                if (currentSearchData && currentSearchData.products) {
+                    updateDisplayedImages();
+                }
+            }
+        } catch (error) {
+            console.error('Error checking image status:', error);
+        }
+    }
+
+    async function refreshProductImages() {
+        try {
+            // Reload products to get updated image URLs
+            const response = await fetch('/api/v1/products');
+            const data = await response.json();
+
+            if (data.success) {
+                allProducts = data.data.products;
+                console.log('Refreshed product data with new image URLs');
+            }
+        } catch (error) {
+            console.error('Error refreshing product images:', error);
+        }
+    }
+
+    function updateDisplayedImages() {
+        // Find all product cards currently displayed
+        const productCards = document.querySelectorAll('.product-card');
+
+        productCards.forEach(card => {
+            const productId = card.getAttribute('data-product-id');
+            const imgElement = card.querySelector('img');
+
+            if (imgElement && productId) {
+                // Find updated product data
+                const product = allProducts.find(p => p.id === productId);
+
+                if (product && product.image_url && product.has_image) {
+                    // Update image source if it has changed
+                    if (imgElement.src !== product.image_url) {
+                        imgElement.src = product.image_url;
+                        console.log(`Updated image for product ${productId}`);
+                    }
+                }
+            }
+        });
+    }
+</script>
+{% endblock %}

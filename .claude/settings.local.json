@@ -1,0 +1,16 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(gcloud firestore databases create:*)",
+      "Bash(gcloud services enable:*)",
+      "Bash(gcloud iam service-accounts create:*)",
+      "Bash(gcloud projects add-iam-policy-binding:*)",
+      "Bash(gcloud iam service-accounts keys:*)",
+      "Bash(FLASK_ENV=production python3 migrate_to_firestore.py --skip-existing --no-backup --verbose)",
+      "Bash(GOOGLE_APPLICATION_CREDENTIALS=\"firebase-credentials-shoparound.json\" FLASK_ENV=production python3 migrate_to_firestore.py --skip-existing --no-backup --verbose)",
+      "Bash(./pushdeploy.sh)"
+    ],
+    "deny": [],
+    "ask": []
+  }
+}

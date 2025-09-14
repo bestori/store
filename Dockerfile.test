@@ -1,0 +1,20 @@
+# Minimal test Dockerfile for debugging Cloud Run issues
+FROM python:3.12-slim
+
+WORKDIR /app
+
+# Install only Flask
+RUN pip install flask gunicorn
+
+# Copy minimal test app
+COPY test_minimal.py .
+
+# Expose port
+EXPOSE $PORT
+
+# Simple health check
+HEALTHCHECK --interval=30s --timeout=5s --start-period=5s --retries=2 \
+    CMD python -c "import requests; requests.get('http://localhost:' + str(os.environ.get('PORT', 8080)) + '/health')" || exit 1
+
+# Run with gunicorn
+CMD exec gunicorn --bind 0.0.0.0:$PORT --workers 1 --timeout 30 test_minimal:app

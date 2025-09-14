@@ -1,0 +1,615 @@
+{% extends "base.html" %}
+
+{% block title %}
+{% if session.get('preferred_language') == 'english' %}
+Shopping Lists - Store
+{% else %}
+רשימות קניות - חנות
+{% endif %}
+{% endblock %}
+
+{% block content %}
+<div class="container">
+    <div class="row">
+        <div class="col-12">
+            <div class="d-flex justify-content-between align-items-center mb-4">
+                <h2>
+                    <i class="bi bi-cart3 me-2 text-primary"></i>
+                    {% if session.get('preferred_language') == 'english' %}
+                    My Shopping Lists
+                    {% else %}
+                    רשימות הקניות שלי
+                    {% endif %}
+                </h2>
+                <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#createListModal">
+                    <i class="bi bi-plus-circle me-2"></i>
+                    {% if session.get('preferred_language') == 'english' %}
+                    Create New List
+                    {% else %}
+                    צור רשימה חדשה
+                    {% endif %}
+                </button>
+            </div>
+
+            <!-- User Info -->
+            <div class="card mb-4">
+                <div class="card-body">
+                    <div class="row align-items-center">
+                        <div class="col-md-6">
+                            <h5 class="mb-1">
+                                <i class="bi bi-person-circle me-2"></i>
+                                {{ user.user_code }}
+                            </h5>
+                            <small class="text-muted">
+                                {% if session.get('preferred_language') == 'english' %}
+                                Member since {{ user.created_at.strftime('%B %Y') if user.created_at else 'Recently' }}
+                                {% else %}
+                                חבר מאז {{ user.created_at.strftime('%B %Y') if user.created_at else 'לאחרונה' }}
+                                {% endif %}
+                            </small>
+                        </div>
+                        <div class="col-md-6 text-md-end mt-3 mt-md-0">
+                            <div class="row text-center">
+                                <div class="col-4">
+                                    <div class="fw-bold text-primary h4 mb-0">{{ shopping_lists|length }}</div>
+                                    <small class="text-muted">
+                                        {% if session.get('preferred_language') == 'english' %}Lists{% else %}רשימות{%
+                                        endif %}
+                                    </small>
+                                </div>
+                                <div class="col-4">
+                                    <div class="fw-bold text-success h4 mb-0" id="totalItems">0</div>
+                                    <small class="text-muted">
+                                        {% if session.get('preferred_language') == 'english' %}Items{% else %}פריטים{%
+                                        endif %}
+                                    </small>
+                                </div>
+                                <div class="col-4">
+                                    <div class="fw-bold text-info h4 mb-0" id="totalValue">₪0</div>
+                                    <small class="text-muted">
+                                        {% if session.get('preferred_language') == 'english' %}Value{% else %}ערך{%
+                                        endif %}
+                                    </small>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Shopping Lists -->
+            {% if shopping_lists %}
+            <div class="row" id="shoppingListsContainer">
+                {% for shopping_list in shopping_lists %}
+                <div class="col-lg-6 col-xl-4 mb-4">
+                    <div class="card product-card h-100" data-list-id="{{ shopping_list.list_id }}">
+                        <div class="card-body">
+                            <div class="d-flex justify-content-between align-items-start mb-3">
+                                <h5 class="card-title mb-0">
+                                    <a href="{{ url_for('shopping_list.view_shopping_list', list_id=shopping_list.list_id) }}"
+                                        class="text-decoration-none">
+                                        {{ shopping_list.list_name }}
+                                    </a>
+                                </h5>
+                                <div class="dropdown">
+                                    <button class="btn btn-sm btn-outline-secondary" data-bs-toggle="dropdown">
+                                        <i class="bi bi-three-dots-vertical"></i>
+                                    </button>
+                                    <ul class="dropdown-menu">
+                                        <li><a class="dropdown-item"
+                                                href="{{ url_for('shopping_list.view_shopping_list', list_id=shopping_list.list_id) }}">
+                                                <i class="bi bi-eye me-2"></i>
+                                                {% if session.get('preferred_language') == 'english' %}View{% else
+                                                %}צפה{% endif %}
+                                            </a></li>
+                                        <li><a class="dropdown-item edit-list-btn" href="#"
+                                                data-list-id="{{ shopping_list.list_id }}">
+                                                <i class="bi bi-pencil me-2"></i>
+                                                {% if session.get('preferred_language') == 'english' %}Edit{% else
+                                                %}ערוך{% endif %}
+                                            </a></li>
+                                        <li><a class="dropdown-item duplicate-list-btn" href="#"
+                                                data-list-id="{{ shopping_list.list_id }}">
+                                                <i class="bi bi-copy me-2"></i>
+                                                {% if session.get('preferred_language') == 'english' %}Duplicate{% else
+                                                %}שכפל{% endif %}
+                                            </a></li>
+                                        <li>
+                                            <hr class="dropdown-divider">
+                                        </li>
+                                        <li><a class="dropdown-item text-danger delete-list-btn" href="#"
+                                                data-list-id="{{ shopping_list.list_id }}">
+                                                <i class="bi bi-trash me-2"></i>
+                                                {% if session.get('preferred_language') == 'english' %}Delete{% else
+                                                %}מחק{% endif %}
+                                            </a></li>
+                                    </ul>
+                                </div>
+                            </div>
+
+                            {% if shopping_list.description %}
+                            <p class="card-text text-muted">{{ shopping_list.description }}</p>
+                            {% endif %}
+
+                            <div class="row text-center mb-3">
+                                <div class="col-4">
+                                    <div class="fw-bold text-primary">{{ shopping_list.get_item_count() }}</div>
+                                    <small class="text-muted">
+                                        {% if session.get('preferred_language') == 'english' %}Items{% else %}פריטים{%
+                                        endif %}
+                                    </small>
+                                </div>
+                                <div class="col-4">
+                                    <div class="fw-bold text-success">{{ shopping_list.get_total_quantity() }}</div>
+                                    <small class="text-muted">
+                                        {% if session.get('preferred_language') == 'english' %}Quantity{% else %}כמות{%
+                                        endif %}
+                                    </small>
+                                </div>
+                                <div class="col-4">
+                                    <div class="fw-bold text-info">₪{{ "%.2f"|format(shopping_list.get_total_value() or
+                                        0) }}</div>
+                                    <small class="text-muted">
+                                        {% if session.get('preferred_language') == 'english' %}Value{% else %}ערך{%
+                                        endif %}
+                                    </small>
+                                </div>
+                            </div>
+
+                            <div class="d-flex justify-content-between align-items-center">
+                                <small class="text-muted">
+                                    <i class="bi bi-calendar3 me-1"></i>
+                                    {% if shopping_list.updated_at %}
+                                    {{ shopping_list.updated_at.strftime('%d/%m/%Y') }}
+                                    {% else %}
+                                    {{ shopping_list.created_at.strftime('%d/%m/%Y') if shopping_list.created_at else
+                                    'Recent' }}
+                                    {% endif %}
+                                </small>
+                                <div class="btn-group btn-group-sm">
+                                    <a href="{{ url_for('shopping_list.view_shopping_list', list_id=shopping_list.list_id) }}"
+                                        class="btn btn-outline-primary">
+                                        <i class="bi bi-eye"></i>
+                                    </a>
+                                    <a href="{{ url_for('shopping_list.generate_html_list', list_id=shopping_list.list_id) }}"
+                                        class="btn btn-outline-success" target="_blank">
+                                        <i class="bi bi-printer"></i>
+                                    </a>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+            {% else %}
+            <!-- Empty State -->
+            <div class="text-center py-5">
+                <i class="bi bi-cart3 text-muted" style="font-size: 4rem;"></i>
+                <h4 class="mt-3">
+                    {% if session.get('preferred_language') == 'english' %}
+                    No Shopping Lists Yet
+                    {% else %}
+                    עדיין אין רשימות קניות
+                    {% endif %}
+                </h4>
+                <p class="text-muted mb-4">
+                    {% if session.get('preferred_language') == 'english' %}
+                    Create your first shopping list to get started
+                    {% else %}
+                    צור את רשימת הקניות הראשונה שלך כדי להתחיל
+                    {% endif %}
+                </p>
+                <button class="btn btn-primary btn-lg" data-bs-toggle="modal" data-bs-target="#createListModal">
+                    <i class="bi bi-plus-circle me-2"></i>
+                    {% if session.get('preferred_language') == 'english' %}
+                    Create Your First List
+                    {% else %}
+                    צור את הרשימה הראשונה שלך
+                    {% endif %}
+                </button>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+<!-- Create List Modal -->
+<div class="modal fade" id="createListModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">
+                    <i class="bi bi-plus-circle me-2"></i>
+                    {% if session.get('preferred_language') == 'english' %}
+                    Create New Shopping List
+                    {% else %}
+                    צור רשימת קניות חדשה
+                    {% endif %}
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <form id="createListForm">
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label for="listName" class="form-label">
+                            {% if session.get('preferred_language') == 'english' %}
+                            List Name
+                            {% else %}
+                            שם הרשימה
+                            {% endif %}
+                            <span class="text-danger">*</span>
+                        </label>
+                        <input type="text" class="form-control" id="listName" name="list_name" required maxlength="100"
+                            placeholder="{% if session.get('preferred_language') == 'english' %}Enter list name{% else %}הזן שם רשימה{% endif %}">
+                    </div>
+                    <div class="mb-3">
+                        <label for="listDescription" class="form-label">
+                            {% if session.get('preferred_language') == 'english' %}
+                            Description
+                            {% else %}
+                            תיאור
+                            {% endif %}
+                            <span class="text-muted">({% if session.get('preferred_language') == 'english' %}Optional{%
+                                else %}אופציונלי{% endif %})</span>
+                        </label>
+                        <textarea class="form-control" id="listDescription" name="description" rows="3" maxlength="500"
+                            placeholder="{% if session.get('preferred_language') == 'english' %}Enter description{% else %}הזן תיאור{% endif %}"></textarea>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+                        {% if session.get('preferred_language') == 'english' %}Cancel{% else %}בטל{% endif %}
+                    </button>
+                    <button type="submit" class="btn btn-primary">
+                        <span class="loading-spinner spinner-border spinner-border-sm me-2" role="status"></span>
+                        <i class="bi bi-plus-circle me-2"></i>
+                        {% if session.get('preferred_language') == 'english' %}Create List{% else %}צור רשימה{% endif %}
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Edit List Modal -->
+<div class="modal fade" id="editListModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">
+                    <i class="bi bi-pencil me-2"></i>
+                    {% if session.get('preferred_language') == 'english' %}
+                    Edit Shopping List
+                    {% else %}
+                    ערוך רשימת קניות
+                    {% endif %}
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <form id="editListForm">
+                <div class="modal-body">
+                    <input type="hidden" id="editListId" name="list_id">
+                    <div class="mb-3">
+                        <label for="editListName" class="form-label">
+                            {% if session.get('preferred_language') == 'english' %}
+                            List Name
+                            {% else %}
+                            שם הרשימה
+                            {% endif %}
+                            <span class="text-danger">*</span>
+                        </label>
+                        <input type="text" class="form-control" id="editListName" name="list_name" required
+                            maxlength="100">
+                    </div>
+                    <div class="mb-3">
+                        <label for="editListDescription" class="form-label">
+                            {% if session.get('preferred_language') == 'english' %}
+                            Description
+                            {% else %}
+                            תיאור
+                            {% endif %}
+                        </label>
+                        <textarea class="form-control" id="editListDescription" name="description" rows="3"
+                            maxlength="500"></textarea>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+                        {% if session.get('preferred_language') == 'english' %}Cancel{% else %}בטל{% endif %}
+                    </button>
+                    <button type="submit" class="btn btn-primary">
+                        <span class="loading-spinner spinner-border spinner-border-sm me-2" role="status"></span>
+                        <i class="bi bi-check-circle me-2"></i>
+                        {% if session.get('preferred_language') == 'english' %}Save Changes{% else %}שמור שינויים{%
+                        endif %}
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Duplicate List Modal -->
+<div class="modal fade" id="duplicateListModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">
+                    <i class="bi bi-copy me-2"></i>
+                    {% if session.get('preferred_language') == 'english' %}
+                    Duplicate Shopping List
+                    {% else %}
+                    שכפל רשימת קניות
+                    {% endif %}
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <form id="duplicateListForm">
+                <div class="modal-body">
+                    <input type="hidden" id="duplicateListId" name="list_id">
+                    <div class="mb-3">
+                        <label for="duplicateListName" class="form-label">
+                            {% if session.get('preferred_language') == 'english' %}
+                            New List Name
+                            {% else %}
+                            שם הרשימה החדשה
+                            {% endif %}
+                        </label>
+                        <input type="text" class="form-control" id="duplicateListName" name="new_name" maxlength="100"
+                            placeholder="{% if session.get('preferred_language') == 'english' %}Leave empty to auto-generate{% else %}השאר ריק לייצור אוטומטי{% endif %}">
+                        <div class="form-text">
+                            {% if session.get('preferred_language') == 'english' %}
+                            If left empty, " - Copy" will be added to the original name
+                            {% else %}
+                            אם נשאר ריק, " - עותק" יתווסף לשם המקורי
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+                        {% if session.get('preferred_language') == 'english' %}Cancel{% else %}בטל{% endif %}
+                    </button>
+                    <button type="submit" class="btn btn-primary">
+                        <span class="loading-spinner spinner-border spinner-border-sm me-2" role="status"></span>
+                        <i class="bi bi-copy me-2"></i>
+                        {% if session.get('preferred_language') == 'english' %}Duplicate List{% else %}שכפל רשימה{%
+                        endif %}
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    document.addEventListener('DOMContentLoaded', function () {
+        // Calculate and display totals
+        calculateTotals();
+
+        // Create list form handler
+        const createForm = document.getElementById('createListForm');
+        createForm.addEventListener('submit', function (e) {
+            e.preventDefault();
+
+            const listName = document.getElementById('listName').value.trim();
+            const description = document.getElementById('listDescription').value.trim();
+
+            if (!listName) {
+                showAlert('{% if session.get("preferred_language") == "english" %}Please enter a list name.{% else %}אנא הזן שם רשימה.{% endif %}', 'warning');
+                return;
+            }
+
+            const submitButton = createForm.querySelector('button[type="submit"]');
+            setButtonLoading(submitButton, true);
+
+            makeRequest('{{ url_for("shopping_list.create_shopping_list") }}', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    list_name: listName,
+                    description: description || null
+                })
+            })
+                .then(response => {
+                    if (response.success) {
+                        showAlert('{% if session.get("preferred_language") == "english" %}Shopping list created successfully!{% else %}רשימת הקניות נוצרה בהצלחה!{% endif %}', 'success');
+                        setTimeout(() => {
+                            window.location.reload();
+                        }, 1500);
+                    } else {
+                        throw new Error(response.error);
+                    }
+                })
+                .catch(error => {
+                    console.error('Error creating list:', error);
+                    showAlert('{% if session.get("preferred_language") == "english" %}Failed to create shopping list.{% else %}יצירת רשימת הקניות נכשלה.{% endif %}', 'danger');
+                })
+                .finally(() => {
+                    setButtonLoading(submitButton, false);
+                });
+        });
+
+        // Edit list handlers
+        const editButtons = document.querySelectorAll('.edit-list-btn');
+        editButtons.forEach(btn => {
+            btn.addEventListener('click', function (e) {
+                e.preventDefault();
+                const listId = this.dataset.listId;
+                const listCard = document.querySelector(`[data-list-id="${listId}"]`);
+                const listName = listCard.querySelector('.card-title a').textContent.trim();
+                const description = listCard.querySelector('.card-text') ? listCard.querySelector('.card-text').textContent.trim() : '';
+
+                document.getElementById('editListId').value = listId;
+                document.getElementById('editListName').value = listName;
+                document.getElementById('editListDescription').value = description;
+
+                new bootstrap.Modal(document.getElementById('editListModal')).show();
+            });
+        });
+
+        // Edit form handler
+        const editForm = document.getElementById('editListForm');
+        editForm.addEventListener('submit', function (e) {
+            e.preventDefault();
+
+            const listId = document.getElementById('editListId').value;
+            const listName = document.getElementById('editListName').value.trim();
+            const description = document.getElementById('editListDescription').value.trim();
+
+            if (!listName) {
+                showAlert('{% if session.get("preferred_language") == "english" %}Please enter a list name.{% else %}אנא הזן שם רשימה.{% endif %}', 'warning');
+                return;
+            }
+
+            const submitButton = editForm.querySelector('button[type="submit"]');
+            setButtonLoading(submitButton, true);
+
+            makeRequest(`{{ url_for("shopping_list.update_shopping_list", list_id="LIST_ID") }}`.replace('LIST_ID', listId), {
+                method: 'PUT',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    list_name: listName,
+                    description: description || null
+                })
+            })
+                .then(response => {
+                    if (response.success) {
+                        showAlert('{% if session.get("preferred_language") == "english" %}Shopping list updated successfully!{% else %}רשימת הקניות עודכנה בהצלחה!{% endif %}', 'success');
+                        setTimeout(() => {
+                            window.location.reload();
+                        }, 1500);
+                    } else {
+                        throw new Error(response.error);
+                    }
+                })
+                .catch(error => {
+                    console.error('Error updating list:', error);
+                    showAlert('{% if session.get("preferred_language") == "english" %}Failed to update shopping list.{% else %}עדכון רשימת הקניות נכשל.{% endif %}', 'danger');
+                })
+                .finally(() => {
+                    setButtonLoading(submitButton, false);
+                });
+        });
+
+        // Duplicate list handlers
+        const duplicateButtons = document.querySelectorAll('.duplicate-list-btn');
+        duplicateButtons.forEach(btn => {
+            btn.addEventListener('click', function (e) {
+                e.preventDefault();
+                const listId = this.dataset.listId;
+
+                document.getElementById('duplicateListId').value = listId;
+                document.getElementById('duplicateListName').value = '';
+
+                new bootstrap.Modal(document.getElementById('duplicateListModal')).show();
+            });
+        });
+
+        // Duplicate form handler
+        const duplicateForm = document.getElementById('duplicateListForm');
+        duplicateForm.addEventListener('submit', function (e) {
+            e.preventDefault();
+
+            const listId = document.getElementById('duplicateListId').value;
+            const newName = document.getElementById('duplicateListName').value.trim();
+
+            const submitButton = duplicateForm.querySelector('button[type="submit"]');
+            setButtonLoading(submitButton, true);
+
+            makeRequest(`{{ url_for("shopping_list.duplicate_shopping_list", list_id="LIST_ID") }}`.replace('LIST_ID', listId), {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    new_name: newName || null
+                })
+            })
+                .then(response => {
+                    if (response.success) {
+                        showAlert('{% if session.get("preferred_language") == "english" %}Shopping list duplicated successfully!{% else %}רשימת הקניות שוכפלה בהצלחה!{% endif %}', 'success');
+                        setTimeout(() => {
+                            window.location.reload();
+                        }, 1500);
+                    } else {
+                        throw new Error(response.error);
+                    }
+                })
+                .catch(error => {
+                    console.error('Error duplicating list:', error);
+                    showAlert('{% if session.get("preferred_language") == "english" %}Failed to duplicate shopping list.{% else %}שכפול רשימת הקניות נכשל.{% endif %}', 'danger');
+                })
+                .finally(() => {
+                    setButtonLoading(submitButton, false);
+                });
+        });
+
+        // Delete list handlers
+        const deleteButtons = document.querySelectorAll('.delete-list-btn');
+        deleteButtons.forEach(btn => {
+            btn.addEventListener('click', function (e) {
+                e.preventDefault();
+                const listId = this.dataset.listId;
+                const listCard = document.querySelector(`[data-list-id="${listId}"]`);
+                const listName = listCard.querySelector('.card-title a').textContent.trim();
+
+                if (confirm('{% if session.get("preferred_language") == "english" %}Are you sure you want to delete "' + listName + '"?{% else %}האם אתה בטוח שברצונך למחוק את "' + listName + '"?{% endif %}')) {
+                    makeRequest(`{{ url_for("shopping_list.delete_shopping_list", list_id="LIST_ID") }}`.replace('LIST_ID', listId), {
+                        method: 'DELETE'
+                    })
+                        .then(response => {
+                            if (response.success) {
+                                showAlert('{% if session.get("preferred_language") == "english" %}Shopping list deleted successfully!{% else %}רשימת הקניות נמחקה בהצלחה!{% endif %}', 'success');
+                                listCard.remove();
+                                calculateTotals();
+
+                                // Check if no lists remain
+                                if (document.querySelectorAll('[data-list-id]').length === 0) {
+                                    setTimeout(() => {
+                                        window.location.reload();
+                                    }, 1500);
+                                }
+                            } else {
+                                throw new Error(response.error);
+                            }
+                        })
+                        .catch(error => {
+                            console.error('Error deleting list:', error);
+                            showAlert('{% if session.get("preferred_language") == "english" %}Failed to delete shopping list.{% else %}מחיקת רשימת הקניות נכשלה.{% endif %}', 'danger');
+                        });
+                }
+            });
+        });
+
+        function calculateTotals() {
+            let totalItems = 0;
+            let totalValue = 0;
+
+            document.querySelectorAll('[data-list-id]').forEach(card => {
+                const itemsElement = card.querySelector('.fw-bold.text-primary');
+                const valueElement = card.querySelector('.fw-bold.text-info');
+
+                if (itemsElement) {
+                    totalItems += parseInt(itemsElement.textContent) || 0;
+                }
+
+                if (valueElement) {
+                    const valueText = valueElement.textContent.replace('₪', '').replace(',', '');
+                    totalValue += parseFloat(valueText) || 0;
+                }
+            });
+
+            document.getElementById('totalItems').textContent = totalItems;
+            document.getElementById('totalValue').textContent = `₪${totalValue.toFixed(2)}`;
+        }
+    });
+</script>
+{% endblock %}

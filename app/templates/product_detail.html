@@ -1,0 +1,366 @@
+<!DOCTYPE html>
+<html lang="{{ 'he' if preferred_language == 'hebrew' else 'en' }}"
+    dir="{{ 'rtl' if preferred_language == 'hebrew' else 'ltr' }}">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% if preferred_language == 'hebrew' %}פרטי מוצר{% else %}Product Details{% endif %} - {{
+        product.descriptions.hebrew if preferred_language == 'hebrew' else product.descriptions.english }}</title>
+
+    <!-- Bootstrap CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.0/font/bootstrap-icons.css" rel="stylesheet">
+
+    <!-- Custom CSS -->
+    <link href="{{ url_for('static', filename='css/main.css') }}" rel="stylesheet">
+
+    {% if preferred_language == 'hebrew' %}
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Arial, sans-serif;
+        }
+
+        .rtl {
+            direction: rtl;
+            text-align: right;
+        }
+    </style>
+    {% endif %}
+</head>
+
+<body class="{{ 'rtl' if preferred_language == 'hebrew' else '' }}">
+    <!-- Navigation -->
+    <nav class="navbar navbar-expand-lg navbar-dark bg-primary">
+        <div class="container">
+            <a class="navbar-brand" href="{{ url_for('main.index') }}">
+                <i class="bi bi-shop"></i>
+                {% if preferred_language == 'hebrew' %}
+                חנות
+                {% else %}
+                Store
+                {% endif %}
+            </a>
+
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+
+            <div class="collapse navbar-collapse" id="navbarNav">
+                <ul class="navbar-nav ms-auto">
+                    <li class="nav-item">
+                        <a class="nav-link" href="{{ url_for('search.search_page') }}">
+                            <i class="bi bi-search"></i>
+                            {% if preferred_language == 'hebrew' %}חיפוש{% else %}Search{% endif %}
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="{{ url_for('shopping_list.shopping_lists_page') }}">
+                            <i class="bi bi-cart"></i>
+                            {% if preferred_language == 'hebrew' %}רשימות קניות{% else %}Shopping Lists{% endif %}
+                        </a>
+                    </li>
+                </ul>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container mt-4">
+        <!-- Breadcrumb -->
+        <nav aria-label="breadcrumb">
+            <ol class="breadcrumb">
+                <li class="breadcrumb-item"><a href="{{ url_for('main.index') }}">{% if preferred_language == 'hebrew'
+                        %}בית{% else %}Home{% endif %}</a></li>
+                <li class="breadcrumb-item"><a href="{{ url_for('search.search_page') }}">{% if preferred_language ==
+                        'hebrew' %}חיפוש{% else %}Search{% endif %}</a></li>
+                <li class="breadcrumb-item active" aria-current="page">{{ product.descriptions.hebrew if
+                    preferred_language == 'hebrew' else product.descriptions.english }}</li>
+            </ol>
+        </nav>
+
+        <div class="row">
+            <!-- Product Image -->
+            <div class="col-lg-6 mb-4">
+                <div class="card">
+                    <div class="card-body text-center">
+                        {% if product.image_url and product.image_url != 'undefined' and product.image_url != None %}
+                        <img src="{{ product.image_url }}"
+                            alt="{{ product.descriptions.hebrew if preferred_language == 'hebrew' else product.descriptions.english }}"
+                            class="img-fluid rounded" style="max-height: 400px;">
+                        {% else %}
+                        <div class="placeholder-image d-flex align-items-center justify-content-center bg-light rounded"
+                            style="height: 300px;">
+                            <div class="text-center text-muted">
+                                <i class="bi bi-image" style="font-size: 4rem;"></i>
+                                <p class="mt-2">{% if preferred_language == 'hebrew' %}אין תמונה זמינה{% else %}No Image
+                                    Available{% endif %}</p>
+                            </div>
+                        </div>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+
+            <!-- Product Details -->
+            <div class="col-lg-6">
+                <div class="card">
+                    <div class="card-header">
+                        <h3 class="card-title mb-0">
+                            {% if preferred_language == 'hebrew' %}
+                            {{ product.descriptions.hebrew }}
+                            {% else %}
+                            {{ product.descriptions.english }}
+                            {% endif %}
+                        </h3>
+                    </div>
+                    <div class="card-body">
+                        <!-- Product Info -->
+                        <div class="row mb-3">
+                            <div class="col-sm-4"><strong>{% if preferred_language == 'hebrew' %}קוד מוצר{% else
+                                    %}Product Code{% endif %}:</strong></div>
+                            <div class="col-sm-8">{{ product.menora_id }}</div>
+                        </div>
+
+                        {% if product.supplier_code %}
+                        <div class="row mb-3">
+                            <div class="col-sm-4"><strong>{% if preferred_language == 'hebrew' %}קוד ספק{% else
+                                    %}Supplier Code{% endif %}:</strong></div>
+                            <div class="col-sm-8">{{ product.supplier_code }}</div>
+                        </div>
+                        {% endif %}
+
+                        {% if product.category %}
+                        <div class="row mb-3">
+                            <div class="col-sm-4"><strong>{% if preferred_language == 'hebrew' %}קטגוריה{% else
+                                    %}Category{% endif %}:</strong></div>
+                            <div class="col-sm-8">{{ product.category }}</div>
+                        </div>
+                        {% endif %}
+
+                        {% if product.specifications %}
+                        {% if product.specifications.type %}
+                        <div class="row mb-3">
+                            <div class="col-sm-4"><strong>{% if preferred_language == 'hebrew' %}סוג{% else %}Type{%
+                                    endif %}:</strong></div>
+                            <div class="col-sm-8">{{ product.specifications.type }}</div>
+                        </div>
+                        {% endif %}
+
+                        {% if product.specifications.material %}
+                        <div class="row mb-3">
+                            <div class="col-sm-4"><strong>{% if preferred_language == 'hebrew' %}חומר{% else
+                                    %}Material{% endif %}:</strong></div>
+                            <div class="col-sm-8">{{ product.specifications.material }}</div>
+                        </div>
+                        {% endif %}
+
+                        {% if product.specifications.height %}
+                        <div class="row mb-3">
+                            <div class="col-sm-4"><strong>{% if preferred_language == 'hebrew' %}גובה{% else %}Height{%
+                                    endif %}:</strong></div>
+                            <div class="col-sm-8">{{ product.specifications.height }}mm</div>
+                        </div>
+                        {% endif %}
+
+                        {% if product.specifications.width %}
+                        <div class="row mb-3">
+                            <div class="col-sm-4"><strong>{% if preferred_language == 'hebrew' %}רוחב{% else %}Width{%
+                                    endif %}:</strong></div>
+                            <div class="col-sm-8">{{ product.specifications.width }}mm</div>
+                        </div>
+                        {% endif %}
+
+                        {% if product.specifications.thickness %}
+                        <div class="row mb-3">
+                            <div class="col-sm-4"><strong>{% if preferred_language == 'hebrew' %}עובי{% else
+                                    %}Thickness{% endif %}:</strong></div>
+                            <div class="col-sm-8">{{ product.specifications.thickness }}mm</div>
+                        </div>
+                        {% endif %}
+                        {% endif %}
+
+                        <!-- Pricing -->
+                        {% if product.pricing and product.pricing.base_price %}
+                        <div class="row mb-3">
+                            <div class="col-sm-4"><strong>{% if preferred_language == 'hebrew' %}מחיר{% else %}Price{%
+                                    endif %}:</strong></div>
+                            <div class="col-sm-8">
+                                <span class="fs-5 text-primary" id="unitPrice"
+                                    data-unit-price="{{ '%.2f'|format(product.pricing.base_price) }}">
+                                    ₪{{ "%.2f"|format(product.pricing.base_price) }}
+                                </span>
+                                {% if product.pricing.currency and product.pricing.currency != 'ILS' %}
+                                <small class="text-muted">({{ product.pricing.currency }})</small>
+                                {% endif %}
+                            </div>
+                        </div>
+                        {% endif %}
+
+                        <!-- Total Length Calculator and Add -->
+                        <div class="row mt-4">
+                            <div class="col-12">
+                                <div class="card bg-light">
+                                    <div class="card-body">
+                                        <div class="row g-2 align-items-end">
+                                            <div class="col-md-6">
+                                                <label for="totalLength" class="form-label">{% if preferred_language ==
+                                                    'hebrew' %}אורך נדרש (מ"מ){% else %}Total Required Length (mm){%
+                                                    endif %}</label>
+                                                <input type="number" class="form-control" id="totalLength" min="1"
+                                                    placeholder="{{ 'הזן אורך במ" מ' if preferred_language=='hebrew'
+                                                    else 'Enter length in mm' }}">
+                                            </div>
+                                            <div class="col-md-6">
+                                                <div class="mb-2">
+                                                    <small class="text-muted">
+                                                        {% if preferred_language == 'hebrew' %}רוחב יחידה:{% else %}Unit
+                                                        Width:{% endif %}
+                                                        <span id="unitWidth"
+                                                            data-unit-width="{{ product.specifications.width if product.specifications and product.specifications.width else 0 }}">{{
+                                                            product.specifications.width if product.specifications and
+                                                            product.specifications.width else '—' }} mm</span>
+                                                    </small>
+                                                </div>
+                                                <div id="calcSummary" class="small"></div>
+                                            </div>
+                                        </div>
+                                        <div class="d-flex gap-2 mt-3">
+                                            <button type="button" class="btn btn-outline-secondary"
+                                                onclick="calculateUnits()">{% if preferred_language == 'hebrew' %}חשב{%
+                                                else %}Calculate{% endif %}</button>
+                                            <button type="button" class="btn btn-primary flex-grow-1"
+                                                onclick="addToCart()">
+                                                <i class="bi bi-cart-plus"></i>
+                                                {% if preferred_language == 'hebrew' %}הוסף לסל{% else %}Add to Cart{%
+                                                endif %}
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+
+    </div>
+
+    <!-- Bootstrap JS -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+
+    <script>
+        // Local helper: safely toggle loading state on a button
+        function setButtonLoading(btn, isLoading) {
+            if (!btn) return;
+            if (isLoading) {
+                btn.dataset.originalText = btn.innerHTML;
+                btn.disabled = true;
+                btn.innerHTML = '<span class="spinner-border spinner-border-sm me-2" role="status"></span>' + btn.textContent;
+            } else {
+                btn.disabled = false;
+                if (btn.dataset.originalText) {
+                    btn.innerHTML = btn.dataset.originalText;
+                    delete btn.dataset.originalText;
+                }
+            }
+        }
+        function calculateUnits() {
+            const totalLength = parseInt(document.getElementById('totalLength').value || '0', 10);
+            const unitWidth = parseInt(document.getElementById('unitWidth').dataset.unitWidth || '0', 10);
+            const unitPriceEl = document.getElementById('unitPrice');
+            const unitPrice = unitPriceEl ? parseFloat(unitPriceEl.dataset.unitPrice || '0') : 0;
+
+            const summaryEl = document.getElementById('calcSummary');
+            if (!unitWidth || !totalLength || totalLength <= 0) {
+                summaryEl.innerHTML = '<span class="text-danger">' + ('{% if preferred_language == 'hebrew' %}אנא הזן אורך תקין ובדוק שלמוצר יש רוחב.{% else %}Enter a valid length and ensure product has a width.{% endif %}') + '</span>';
+                return { quantity: 0, totalPrice: 0 };
+            }
+
+            const quantity = Math.ceil(totalLength / unitWidth);
+            const totalPrice = unitPrice ? (quantity * unitPrice) : 0;
+            summaryEl.innerHTML = (
+                '{% if preferred_language == 'hebrew' %}כמות יחידות:{% else %}Units:{% endif %} ' + quantity +
+                    ' | ' + '{% if preferred_language == 'hebrew' %}אורך כולל:{% else %}Total Length:{% endif %} ' + totalLength + ' mm' +
+                        (unitPrice ? (' | ' + '{% if preferred_language == 'hebrew' %}מחיר כולל:{% else %}Total Price:{% endif %} ₪' + totalPrice.toFixed(2)) : '')
+            );
+
+            return { quantity, totalPrice, totalLength };
+        }
+
+        function addToCart() {
+            const productId = '{{ product.menora_id }}';
+            const addButton = document.querySelector('button[onclick="addToCart()"]');
+
+            const calc = calculateUnits();
+            if (!calc.quantity || calc.quantity <= 0) {
+                showNotification('{% if preferred_language == "hebrew" %}אנא חשב כמות תקינה לפני הוספה{% else %}Please calculate a valid quantity before adding{% endif %}', 'error');
+                return;
+            }
+
+            // Set loading state
+            setButtonLoading(addButton, true);
+
+            // Add to cart via API
+            fetch('/shopping-list/add-item', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    menora_id: productId,
+                    quantity: calc.quantity,
+                    notes: 'Total length: ' + (calc.totalLength || 0) + ' mm'
+                })
+            })
+                .then(async (response) => {
+                    const data = await response.json().catch(() => ({ success: false, error: 'Invalid response' }));
+                    if (!response.ok) {
+                        if (response.status === 401) {
+                            throw new Error('{% if preferred_language == "hebrew" %}נדרש להתחבר כדי להוסיף לרשימה{% else %}You must be logged in to add to shopping list{% endif %}');
+                        }
+                        throw new Error(data.error || 'Request failed');
+                    }
+                    return data;
+                })
+                .then(data => {
+                    if (data.success) {
+                        // Show success message
+                        const message = '{% if preferred_language == "hebrew" %}המוצר נוסף לסל!{% else %}Product added to cart!{% endif %}';
+                        showNotification(message, 'success');
+                    } else {
+                        showNotification(data.error || 'Failed to add product', 'error');
+                    }
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                    showNotification(error && error.message ? error.message : '{% if preferred_language == "hebrew" %}שגיאה בהוספה לסל{% else %}Error adding to cart{% endif %}', 'error');
+                })
+                .finally(() => {
+                    setButtonLoading(addButton, false);
+                });
+        }
+
+        function showNotification(message, type) {
+            // Create and show notification
+            const alert = document.createElement('div');
+            alert.className = `alert alert-${type === 'success' ? 'success' : 'danger'} alert-dismissible fade show position-fixed`;
+            alert.style.cssText = 'top: 20px; right: 20px; z-index: 9999; max-width: 300px;';
+            alert.innerHTML = `
+                ${message}
+                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+            `;
+            document.body.appendChild(alert);
+
+            // Auto-remove after 3 seconds
+            setTimeout(() => {
+                alert.remove();
+            }, 3000);
+        }
+    </script>
+</body>
+
+</html>
+
+</html>

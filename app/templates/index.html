@@ -1,0 +1,356 @@
+{% extends "base.html" %}
+
+{% block title %}
+Store - חנות
+{% endblock %}
+
+{% block content %}
+<div class="container">
+    {% if user %}
+    <!-- Logged In User Dashboard -->
+    <div class="row">
+        <div class="col-12">
+            <!-- Welcome Message -->
+            <div class="card mb-4 border-success">
+                <div class="card-body">
+                    <div class="row align-items-center">
+                        <div class="col-md-8">
+                            <h2 class="text-success mb-2">
+                                <i class="bi bi-person-check-fill me-2"></i>
+                                שלום {{ user.user_code }}! / Welcome {{ user.user_code }}!
+                            </h2>
+                            <p class="mb-0">
+                                <span class="text-muted">ברוך הבא למערכת ניהול רשימות הקניות / Welcome to your shopping
+                                    list management system</span>
+                            </p>
+                        </div>
+                        <div class="col-md-4 text-md-end mt-3 mt-md-0">
+                            <div class="btn-group">
+                                <a href="{{ url_for('auth.profile') }}" class="btn btn-outline-primary">
+                                    <i class="bi bi-person-circle me-1"></i>פרופיל
+                                </a>
+                                <a href="{{ url_for('auth.logout') }}" class="btn btn-outline-secondary">
+                                    <i class="bi bi-box-arrow-right me-1"></i>יציאה
+                                </a>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Quick Actions -->
+            <div class="row mb-4">
+                <div class="col-md-6 mb-3">
+                    <div class="card h-100 hover-card">
+                        <div class="card-body text-center">
+                            <div class="mb-3">
+                                <i class="bi bi-search text-primary" style="font-size: 3rem;"></i>
+                            </div>
+                            <h4>חיפוש מוצרים / Product Search</h4>
+                            <p class="text-muted mb-4">חפש מוצרי מגשי כבלים לפי סוג, מידות וגלוון<br>Search cable tray
+                                products by type, dimensions, and finish</p>
+                            <a href="{{ url_for('search.search_page') }}" class="btn btn-primary btn-lg w-100">
+                                <i class="bi bi-search me-2"></i>התחל חיפוש / Start Search
+                            </a>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="col-md-6 mb-3">
+                    <div class="card h-100 hover-card">
+                        <div class="card-body text-center">
+                            <div class="mb-3">
+                                <i class="bi bi-cart-plus text-success" style="font-size: 3rem;"></i>
+                            </div>
+                            <h4>עגלה חדשה / New Cart</h4>
+                            <p class="text-muted mb-4">צור רשימת קניות חדשה לפרויקט שלך<br>Create a new shopping list
+                                for your project</p>
+                            <button class="btn btn-success btn-lg w-100" data-bs-toggle="modal"
+                                data-bs-target="#newCartModal">
+                                <i class="bi bi-plus-circle me-2"></i>צור רשימה / Create List
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Previous Orders / Shopping Lists -->
+            <div class="card">
+                <div class="card-header bg-light">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <h5 class="mb-0">
+                            <i class="bi bi-clock-history me-2"></i>
+                            הזמנות קודמות / Previous Orders
+                        </h5>
+                        <a href="{{ url_for('shopping_list.shopping_lists_page') }}"
+                            class="btn btn-outline-primary btn-sm">
+                            צפה בכל / View All
+                        </a>
+                    </div>
+                </div>
+                <div class="card-body">
+                    {% if recent_lists %}
+                    <div class="row">
+                        {% for shopping_list in recent_lists %}
+                        <div class="col-lg-4 col-md-6 mb-3">
+                            <div class="card border-left-primary h-100">
+                                <div class="card-body">
+                                    <h6 class="card-title">
+                                        <a href="{{ url_for('shopping_list.view_shopping_list', list_id=shopping_list.list_id) }}"
+                                            class="text-decoration-none">
+                                            {{ shopping_list.list_name }}
+                                        </a>
+                                    </h6>
+                                    <div class="row text-center">
+                                        <div class="col-4">
+                                            <small class="text-muted">פריטים</small>
+                                            <div class="fw-bold text-primary">{{ shopping_list.get_item_count() }}</div>
+                                        </div>
+                                        <div class="col-4">
+                                            <small class="text-muted">כמות</small>
+                                            <div class="fw-bold text-success">{{ shopping_list.get_total_quantity() }}
+                                            </div>
+                                        </div>
+                                        <div class="col-4">
+                                            <small class="text-muted">ערך</small>
+                                            <div class="fw-bold text-info">₪{{
+                                                "%.0f"|format(shopping_list.get_total_value()) }}</div>
+                                        </div>
+                                    </div>
+                                    <div class="text-center mt-2">
+                                        <small class="text-muted">
+                                            {% if shopping_list.updated_at %}
+                                            עודכן: {{ shopping_list.updated_at.strftime('%d/%m/%Y') }}
+                                            {% else %}
+                                            נוצר: {{ shopping_list.created_at.strftime('%d/%m/%Y') if
+                                            shopping_list.created_at else 'לאחרונה' }}
+                                            {% endif %}
+                                        </small>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        {% endfor %}
+                    </div>
+                    {% else %}
+                    <div class="text-center py-4">
+                        <i class="bi bi-cart-x text-muted" style="font-size: 3rem;"></i>
+                        <h5 class="mt-3 text-muted">אין רשימות קניות עדיין / No shopping lists yet</h5>
+                        <p class="text-muted">התחל על ידי יצירת רשימה חדשה או חיפוש מוצרים<br>Get started by creating a
+                            new list or searching for products</p>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    {% else %}
+    <!-- Login Section for Non-Authenticated Users -->
+    <div class="row justify-content-center">
+        <div class="col-lg-6 col-md-8">
+            <div class="text-center mb-5">
+                <h1 class="display-4 fw-bold text-primary mb-3">
+                    חנות<br>
+                    <small class="text-muted h3">Store</small>
+                </h1>
+                <p class="lead">הכנס את קוד המשתמש שלך כדי להתחיל<br>Enter your user code to get started</p>
+            </div>
+
+            <!-- Login Form -->
+            <div class="card shadow">
+                <div class="card-header bg-primary text-white text-center">
+                    <h4 class="mb-0">
+                        <i class="bi bi-key me-2"></i>כניסה למערכת / System Login
+                    </h4>
+                </div>
+                <div class="card-body p-4">
+                    {% with messages = get_flashed_messages(with_categories=true) %}
+                    {% if messages %}
+                    {% for category, message in messages %}
+                    <div
+                        class="alert alert-{{ 'danger' if category == 'error' else category }} alert-dismissible fade show">
+                        {{ message }}
+                        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                    </div>
+                    {% endfor %}
+                    {% endif %}
+                    {% endwith %}
+
+                    <form method="POST" action="{{ url_for('auth.login') }}" id="loginForm">
+                        {% if config.WTF_CSRF_ENABLED %}<input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>{% endif %}
+                        <div class="mb-4">
+                            <label for="user_code" class="form-label h5">
+                                קוד משתמש / User Code <span class="text-danger">*</span>
+                            </label>
+                            <div class="input-group input-group-lg">
+                                <span class="input-group-text">
+                                    <i class="bi bi-person-fill"></i>
+                                </span>
+                                <input type="text" class="form-control" id="user_code" name="user_code"
+                                    placeholder="הזן קוד משתמש / Enter user code" required autocomplete="username"
+                                    maxlength="20" pattern="[A-Za-z0-9]+"
+                                    title="קוד משתמש חייב להכיל רק אותיות ומספרים">
+                            </div>
+                            <small class="form-text text-muted">
+                                <i class="bi bi-info-circle me-1"></i>
+                                3-20 תווים, אותיות ומספרים בלבד / 3-20 characters, letters and numbers only
+                            </small>
+                        </div>
+
+                        <button type="submit" class="btn btn-primary btn-lg w-100 mb-3" id="loginButton">
+                            <span class="spinner-border spinner-border-sm me-2 d-none" role="status"
+                                id="loginSpinner"></span>
+                            <i class="bi bi-box-arrow-in-right me-2"></i>
+                            כניסה למערכת / Login to System
+                        </button>
+                    </form>
+
+                    <!-- Help Section -->
+                    <div class="text-center">
+                        <hr class="my-4">
+                        <h6 class="text-muted mb-3">זקוק לעזרה? / Need Help?</h6>
+                        <p class="small text-muted">
+                            <i class="bi bi-question-circle me-1"></i>
+                            אם אין לך קוד משתמש, פנה לצוות התמיכה<br>
+                            If you don't have a user code, contact support
+                        </p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+</div>
+
+<!-- New Cart Modal -->
+<div class="modal fade" id="newCartModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">
+                    <i class="bi bi-cart-plus me-2"></i>
+                    רשימת קניות חדשה / New Shopping List
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <form id="newCartForm">
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label for="listName" class="form-label">
+                            שם הרשימה / List Name <span class="text-danger">*</span>
+                        </label>
+                        <input type="text" class="form-control" id="listName" name="list_name" required maxlength="100"
+                            placeholder="פרויקט חדש / New Project">
+                    </div>
+                    <div class="mb-3">
+                        <label for="listDescription" class="form-label">
+                            תיאור / Description <span class="text-muted">(אופציונלי/Optional)</span>
+                        </label>
+                        <textarea class="form-control" id="listDescription" name="description" rows="3" maxlength="500"
+                            placeholder="תיאור הפרויקט / Project description"></textarea>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">ביטול / Cancel</button>
+                    <button type="submit" class="btn btn-primary">
+                        <span class="spinner-border spinner-border-sm me-2 d-none" role="status"></span>
+                        <i class="bi bi-plus-circle me-2"></i>צור רשימה / Create List
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Features Section -->
+</div>
+{% endblock %}
+
+{% block extra_css %}
+<style>
+    .hover-shadow {
+        transition: all 0.3s ease;
+    }
+
+    .hover-shadow:hover {
+        box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.15) !important;
+        transform: translateY(-2px);
+    }
+
+    .hero-content {
+        animation: fadeInUp 0.8s ease-out;
+    }
+
+    .hero-image {
+        animation: fadeInDown 0.8s ease-out 0.3s both;
+    }
+
+    @keyframes fadeInUp {
+        from {
+            opacity: 0;
+            transform: translateY(30px);
+        }
+
+        to {
+            opacity: 1;
+            transform: translateY(0);
+        }
+    }
+
+    @keyframes fadeInDown {
+        from {
+            opacity: 0;
+            transform: translateY(-30px);
+        }
+
+        to {
+            opacity: 1;
+            transform: translateY(0);
+        }
+    }
+
+    .feature-icon {
+        transition: transform 0.3s ease;
+    }
+
+    .card:hover .feature-icon {
+        transform: scale(1.1);
+    }
+</style>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    document.addEventListener('DOMContentLoaded', function () {
+        // Smooth scrolling for anchor links
+        document.querySelectorAll('a[href^="#"]').forEach(anchor => {
+            anchor.addEventListener('click', function (e) {
+                e.preventDefault();
+                const target = document.querySelector(this.getAttribute('href'));
+                if (target) {
+                    target.scrollIntoView({
+                        behavior: 'smooth',
+                        block: 'start'
+                    });
+                }
+            });
+        });
+
+        // Add scroll animation to feature cards
+        const observer = new IntersectionObserver((entries) => {
+            entries.forEach((entry) => {
+                if (entry.isIntersecting) {
+                    entry.target.style.animation = 'fadeInUp 0.6s ease-out forwards';
+                }
+            });
+        }, {
+            threshold: 0.1
+        });
+
+        document.querySelectorAll('.card').forEach((card) => {
+            observer.observe(card);
+        });
+    });
+</script>
+{% endblock %}

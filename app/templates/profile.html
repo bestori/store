@@ -1,0 +1,554 @@
+{% extends "base.html" %}
+
+{% block title %}
+{% if session.get('preferred_language') == 'english' %}
+Profile - {{ user.user_code }} - Store
+{% else %}
+פרופיל - {{ user.user_code }} - חנות
+{% endif %}
+{% endblock %}
+
+{% block content %}
+<div class="container">
+    <div class="row justify-content-center">
+        <div class="col-lg-8">
+            <!-- Header -->
+            <div class="d-flex justify-content-between align-items-center mb-4">
+                <h2>
+                    <i class="bi bi-person-circle me-2 text-primary"></i>
+                    {% if session.get('preferred_language') == 'english' %}
+                    User Profile
+                    {% else %}
+                    פרופיל משתמש
+                    {% endif %}
+                </h2>
+                <div class="dropdown">
+                    <button class="btn btn-outline-secondary dropdown-toggle" type="button" data-bs-toggle="dropdown">
+                        <i class="bi bi-gear me-1"></i>
+                        {% if session.get('preferred_language') == 'english' %}Settings{% else %}הגדרות{% endif %}
+                    </button>
+                    <ul class="dropdown-menu">
+                        <li><a class="dropdown-item language-switch" href="#" data-lang="hebrew">
+                                <i class="bi bi-translate me-2"></i>עברית
+                            </a></li>
+                        <li><a class="dropdown-item language-switch" href="#" data-lang="english">
+                                <i class="bi bi-translate me-2"></i>English
+                            </a></li>
+                        <li>
+                            <hr class="dropdown-divider">
+                        </li>
+                        <li><a class="dropdown-item text-danger" href="{{ url_for('auth.logout') }}">
+                                <i class="bi bi-box-arrow-right me-2"></i>
+                                {% if session.get('preferred_language') == 'english' %}Logout{% else %}התנתק{% endif %}
+                            </a></li>
+                    </ul>
+                </div>
+            </div>
+
+            <!-- User Information Card -->
+            <div class="card mb-4">
+                <div class="card-header bg-primary text-white">
+                    <h5 class="mb-0">
+                        <i class="bi bi-info-circle me-2"></i>
+                        {% if session.get('preferred_language') == 'english' %}
+                        User Information
+                        {% else %}
+                        מידע משתמש
+                        {% endif %}
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label class="form-label fw-bold">
+                                    {% if session.get('preferred_language') == 'english' %}User Code{% else %}קוד
+                                    משתמש{% endif %}
+                                </label>
+                                <div class="input-group">
+                                    <input type="text" class="form-control bg-light" value="{{ user.user_code }}"
+                                        readonly>
+                                    <button class="btn btn-outline-secondary" type="button"
+                                        onclick="copyToClipboard('{{ user.user_code }}')">
+                                        <i class="bi bi-clipboard"></i>
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label class="form-label fw-bold">
+                                    {% if session.get('preferred_language') == 'english' %}Member Since{% else %}חבר
+                                    מאז{% endif %}
+                                </label>
+                                <input type="text" class="form-control bg-light"
+                                    value="{% if user.created_at %}{{ user.created_at.strftime('%d/%m/%Y %H:%M') }}{% else %}{% if session.get('preferred_language') == 'english' %}Recently{% else %}לאחרונה{% endif %}{% endif %}"
+                                    readonly>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label class="form-label fw-bold">
+                                    {% if session.get('preferred_language') == 'english' %}Preferred Language{% else
+                                    %}שפה מועדפת{% endif %}
+                                </label>
+                                <input type="text" class="form-control bg-light"
+                                    value="{% if session.get('preferred_language') == 'english' %}English{% else %}עברית{% endif %}"
+                                    readonly>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label class="form-label fw-bold">
+                                    {% if session.get('preferred_language') == 'english' %}Last Activity{% else %}פעילות
+                                    אחרונה{% endif %}
+                                </label>
+                                <input type="text" class="form-control bg-light"
+                                    value="{% if user.last_activity %}{{ user.last_activity.strftime('%d/%m/%Y %H:%M') }}{% else %}{% if session.get('preferred_language') == 'english' %}Now{% else %}עכשיו{% endif %}{% endif %}"
+                                    readonly>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Statistics Card -->
+            <div class="card mb-4">
+                <div class="card-header bg-success text-white">
+                    <h5 class="mb-0">
+                        <i class="bi bi-bar-chart me-2"></i>
+                        {% if session.get('preferred_language') == 'english' %}
+                        Activity Statistics
+                        {% else %}
+                        סטטיסטיקות פעילות
+                        {% endif %}
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div class="row text-center">
+                        <div class="col-md-3 col-6 mb-3">
+                            <div class="card border-0 bg-light">
+                                <div class="card-body">
+                                    <h3 class="text-primary mb-1" id="totalLists">{{ user_stats.total_lists if
+                                        user_stats else 0 }}</h3>
+                                    <small class="text-muted">
+                                        {% if session.get('preferred_language') == 'english' %}Shopping Lists{% else
+                                        %}רשימות קניות{% endif %}
+                                    </small>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-3 col-6 mb-3">
+                            <div class="card border-0 bg-light">
+                                <div class="card-body">
+                                    <h3 class="text-success mb-1" id="totalItems">{{ user_stats.total_items if
+                                        user_stats else 0 }}</h3>
+                                    <small class="text-muted">
+                                        {% if session.get('preferred_language') == 'english' %}Total Items{% else %}סה"כ
+                                        פריטים{% endif %}
+                                    </small>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-3 col-6 mb-3">
+                            <div class="card border-0 bg-light">
+                                <div class="card-body">
+                                    <h3 class="text-info mb-1" id="totalValue">₪{{ "%.0f"|format(user_stats.total_value
+                                        if user_stats and user_stats.total_value else 0) }}</h3>
+                                    <small class="text-muted">
+                                        {% if session.get('preferred_language') == 'english' %}Total Value{% else %}ערך
+                                        כולל{% endif %}
+                                    </small>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-3 col-6 mb-3">
+                            <div class="card border-0 bg-light">
+                                <div class="card-body">
+                                    <h3 class="text-warning mb-1" id="totalSearches">{{ user_stats.total_searches if
+                                        user_stats else 0 }}</h3>
+                                    <small class="text-muted">
+                                        {% if session.get('preferred_language') == 'english' %}Searches{% else
+                                        %}חיפושים{% endif %}
+                                    </small>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Recent Activity Card -->
+            <div class="card mb-4">
+                <div class="card-header bg-info text-white">
+                    <h5 class="mb-0">
+                        <i class="bi bi-clock-history me-2"></i>
+                        {% if session.get('preferred_language') == 'english' %}
+                        Recent Activity
+                        {% else %}
+                        פעילות אחרונה
+                        {% endif %}
+                    </h5>
+                </div>
+                <div class="card-body">
+                    {% if recent_activity %}
+                    <div class="timeline">
+                        {% for activity in recent_activity %}
+                        <div class="timeline-item mb-3">
+                            <div class="d-flex align-items-center">
+                                <div class="timeline-icon me-3">
+                                    {% if activity.type == 'list_created' %}
+                                    <i class="bi bi-plus-circle text-success"></i>
+                                    {% elif activity.type == 'item_added' %}
+                                    <i class="bi bi-cart-plus text-primary"></i>
+                                    {% elif activity.type == 'search' %}
+                                    <i class="bi bi-search text-info"></i>
+                                    {% else %}
+                                    <i class="bi bi-activity text-muted"></i>
+                                    {% endif %}
+                                </div>
+                                <div class="flex-grow-1">
+                                    <div class="fw-bold">{{ activity.description }}</div>
+                                    <small class="text-muted">
+                                        <i class="bi bi-clock me-1"></i>
+                                        {{ activity.timestamp.strftime('%d/%m/%Y %H:%M') if activity.timestamp else
+                                        'Recently' }}
+                                    </small>
+                                </div>
+                            </div>
+                        </div>
+                        {% endfor %}
+                    </div>
+                    {% else %}
+                    <div class="text-center py-4">
+                        <i class="bi bi-clock-history text-muted" style="font-size: 2rem;"></i>
+                        <p class="text-muted mt-2">
+                            {% if session.get('preferred_language') == 'english' %}
+                            No recent activity to display
+                            {% else %}
+                            אין פעילות אחרונה להציג
+                            {% endif %}
+                        </p>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+
+            <!-- Quick Actions Card -->
+            <div class="card mb-4">
+                <div class="card-header bg-dark text-white">
+                    <h5 class="mb-0">
+                        <i class="bi bi-lightning me-2"></i>
+                        {% if session.get('preferred_language') == 'english' %}
+                        Quick Actions
+                        {% else %}
+                        פעולות מהירות
+                        {% endif %}
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <a href="{{ url_for('search.search_page') }}" class="btn btn-primary btn-lg w-100">
+                                <i class="bi bi-search me-2"></i>
+                                {% if session.get('preferred_language') == 'english' %}
+                                Search Products
+                                {% else %}
+                                חפש מוצרים
+                                {% endif %}
+                            </a>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <a href="{{ url_for('shopping_list.shopping_lists_page') }}"
+                                class="btn btn-success btn-lg w-100">
+                                <i class="bi bi-cart3 me-2"></i>
+                                {% if session.get('preferred_language') == 'english' %}
+                                My Shopping Lists
+                                {% else %}
+                                רשימות הקניות שלי
+                                {% endif %}
+                            </a>
+                        </div>
+                    </div>
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <button class="btn btn-outline-primary btn-lg w-100" data-bs-toggle="modal"
+                                data-bs-target="#createListModal">
+                                <i class="bi bi-plus-circle me-2"></i>
+                                {% if session.get('preferred_language') == 'english' %}
+                                Create New List
+                                {% else %}
+                                צור רשימה חדשה
+                                {% endif %}
+                            </button>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <button class="btn btn-outline-info btn-lg w-100" onclick="window.print()">
+                                <i class="bi bi-printer me-2"></i>
+                                {% if session.get('preferred_language') == 'english' %}
+                                Print Profile
+                                {% else %}
+                                הדפס פרופיל
+                                {% endif %}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Help Card -->
+            <div class="card">
+                <div class="card-header bg-warning">
+                    <h5 class="mb-0">
+                        <i class="bi bi-question-circle me-2"></i>
+                        {% if session.get('preferred_language') == 'english' %}
+                        Need Help?
+                        {% else %}
+                        זקוק לעזרה?
+                        {% endif %}
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <p class="mb-3">
+                        {% if session.get('preferred_language') == 'english' %}
+                        Having trouble using the Store? Here are some quick tips:
+                        {% else %}
+                        מתקשה להשתמש בחנות מגשי הכבלים? הנה כמה טיפים מהירים:
+                        {% endif %}
+                    </p>
+                    <ul class="list-unstyled">
+                        <li class="mb-2">
+                            <i class="bi bi-check-circle text-success me-2"></i>
+                            {% if session.get('preferred_language') == 'english' %}
+                            Use the search page to find products by name or specifications
+                            {% else %}
+                            השתמש בעמוד החיפוש כדי למצוא מוצרים לפי שם או מפרט
+                            {% endif %}
+                        </li>
+                        <li class="mb-2">
+                            <i class="bi bi-check-circle text-success me-2"></i>
+                            {% if session.get('preferred_language') == 'english' %}
+                            Create shopping lists to organize your orders
+                            {% else %}
+                            צור רשימות קניות כדי לארגן את ההזמנות שלך
+                            {% endif %}
+                        </li>
+                        <li class="mb-2">
+                            <i class="bi bi-check-circle text-success me-2"></i>
+                            {% if session.get('preferred_language') == 'english' %}
+                            Export your lists to HTML for printing or sharing
+                            {% else %}
+                            יצא את הרשימות שלך ל-HTML להדפסה או לשיתוף
+                            {% endif %}
+                        </li>
+                        <li class="mb-0">
+                            <i class="bi bi-check-circle text-success me-2"></i>
+                            {% if session.get('preferred_language') == 'english' %}
+                            Your user code is {{ user.user_code }} - save it to log in again
+                            {% else %}
+                            קוד המשתמש שלך הוא {{ user.user_code }} - שמור אותו כדי להתחבר שוב
+                            {% endif %}
+                        </li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Create List Modal -->
+<div class="modal fade" id="createListModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">
+                    <i class="bi bi-plus-circle me-2"></i>
+                    {% if session.get('preferred_language') == 'english' %}
+                    Create New Shopping List
+                    {% else %}
+                    צור רשימת קניות חדשה
+                    {% endif %}
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <form id="createListForm">
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label for="listName" class="form-label">
+                            {% if session.get('preferred_language') == 'english' %}
+                            List Name
+                            {% else %}
+                            שם הרשימה
+                            {% endif %}
+                            <span class="text-danger">*</span>
+                        </label>
+                        <input type="text" class="form-control" id="listName" name="list_name" required maxlength="100"
+                            placeholder="{% if session.get('preferred_language') == 'english' %}Enter list name{% else %}הזן שם רשימה{% endif %}">
+                    </div>
+                    <div class="mb-3">
+                        <label for="listDescription" class="form-label">
+                            {% if session.get('preferred_language') == 'english' %}
+                            Description
+                            {% else %}
+                            תיאור
+                            {% endif %}
+                            <span class="text-muted">({% if session.get('preferred_language') == 'english' %}Optional{%
+                                else %}אופציונלי{% endif %})</span>
+                        </label>
+                        <textarea class="form-control" id="listDescription" name="description" rows="3" maxlength="500"
+                            placeholder="{% if session.get('preferred_language') == 'english' %}Enter description{% else %}הזן תיאור{% endif %}"></textarea>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+                        {% if session.get('preferred_language') == 'english' %}Cancel{% else %}בטל{% endif %}
+                    </button>
+                    <button type="submit" class="btn btn-primary">
+                        <span class="loading-spinner spinner-border spinner-border-sm me-2" role="status"></span>
+                        <i class="bi bi-plus-circle me-2"></i>
+                        {% if session.get('preferred_language') == 'english' %}Create List{% else %}צור רשימה{% endif %}
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_css %}
+<style>
+    .timeline {
+        position: relative;
+    }
+
+    .timeline-item {
+        position: relative;
+        padding-left: 2rem;
+    }
+
+    .timeline-item:not(:last-child)::after {
+        content: '';
+        position: absolute;
+        left: 1rem;
+        top: 2rem;
+        width: 1px;
+        height: calc(100% - 1rem);
+        background-color: #dee2e6;
+    }
+
+    .timeline-icon {
+        font-size: 1.2rem;
+    }
+
+    @media print {
+
+        .btn,
+        .dropdown,
+        .modal,
+        .timeline-item:not(:last-child)::after {
+            display: none !important;
+        }
+
+        .card {
+            border: 1px solid #000 !important;
+            box-shadow: none !important;
+            break-inside: avoid;
+        }
+
+        .card-header {
+            background-color: #f8f9fa !important;
+            color: #000 !important;
+        }
+    }
+</style>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    document.addEventListener('DOMContentLoaded', function () {
+        // Language switch handlers
+        document.querySelectorAll('.language-switch').forEach(btn => {
+            btn.addEventListener('click', function (e) {
+                e.preventDefault();
+                const lang = this.dataset.lang;
+
+                // Set language preference and reload
+                makeRequest('{{ url_for("main.set_language") }}', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        language: lang
+                    })
+                })
+                    .then(response => {
+                        if (response.success) {
+                            window.location.reload();
+                        }
+                    })
+                    .catch(error => {
+                        console.error('Error setting language:', error);
+                    });
+            });
+        });
+
+        // Create list form handler
+        const createForm = document.getElementById('createListForm');
+        createForm.addEventListener('submit', function (e) {
+            e.preventDefault();
+
+            const listName = document.getElementById('listName').value.trim();
+            const description = document.getElementById('listDescription').value.trim();
+
+            if (!listName) {
+                showAlert('{% if session.get("preferred_language") == "english" %}Please enter a list name.{% else %}אנא הזן שם רשימה.{% endif %}', 'warning');
+                return;
+            }
+
+            showLoading(createForm);
+
+            makeRequest('{{ url_for("shopping_list.create_shopping_list") }}', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    list_name: listName,
+                    description: description || null
+                })
+            })
+                .then(response => {
+                    if (response.success) {
+                        showAlert('{% if session.get("preferred_language") == "english" %}Shopping list created successfully!{% else %}רשימת הקניות נוצרה בהצלחה!{% endif %}', 'success');
+                        setTimeout(() => {
+                            window.location.href = `{{ url_for("shopping_list.view_shopping_list", list_id="LIST_ID") }}`.replace('LIST_ID', response.data.list_id);
+                        }, 1500);
+                    } else {
+                        throw new Error(response.error);
+                    }
+                })
+                .catch(error => {
+                    console.error('Error creating list:', error);
+                    showAlert('{% if session.get("preferred_language") == "english" %}Failed to create shopping list.{% else %}יצירת רשימת הקניות נכשלה.{% endif %}', 'danger');
+                })
+                .finally(() => {
+                    hideLoading(createForm);
+                });
+        });
+    });
+
+    // Copy to clipboard function
+    function copyToClipboard(text) {
+        navigator.clipboard.writeText(text).then(function () {
+            showAlert('{% if session.get("preferred_language") == "english" %}User code copied to clipboard!{% else %}קוד המשתמש הועתק ללוח!{% endif %}', 'success');
+        }).catch(function (err) {
+            console.error('Failed to copy text: ', err);
+            showAlert('{% if session.get("preferred_language") == "english" %}Failed to copy to clipboard.{% else %}ההעתקה ללוח נכשלה.{% endif %}', 'danger');
+        });
+    }
+</script>
+{% endblock %}

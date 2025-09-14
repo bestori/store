@@ -1,0 +1,779 @@
+{% extends "base.html" %}
+
+{% block title %}
+{% if session.get('preferred_language') == 'english' %}
+{{ shopping_list.list_name }} - Store
+{% else %}
+{{ shopping_list.list_name }} - חנות
+{% endif %}
+{% endblock %}
+
+{% block content %}
+<div class="container">
+    <!-- Header -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <nav aria-label="breadcrumb">
+                <ol class="breadcrumb">
+                    <li class="breadcrumb-item">
+                        <a href="{{ url_for('shopping_list.shopping_lists_page') }}">
+                            {% if session.get('preferred_language') == 'english' %}Shopping Lists{% else %}רשימות
+                            קניות{% endif %}
+                        </a>
+                    </li>
+                    <li class="breadcrumb-item active">{{ shopping_list.list_name }}</li>
+                </ol>
+            </nav>
+
+            <div class="d-flex justify-content-between align-items-center">
+                <div>
+                    <h2>
+                        <i class="bi bi-cart3 me-2 text-primary"></i>
+                        {{ shopping_list.list_name }}
+                    </h2>
+                    {% if shopping_list.description %}
+                    <p class="text-muted mb-0">{{ shopping_list.description }}</p>
+                    {% endif %}
+                </div>
+                <div class="btn-group">
+                    <button class="btn btn-outline-primary" data-bs-toggle="modal" data-bs-target="#editListModal">
+                        <i class="bi bi-pencil me-1"></i>
+                        {% if session.get('preferred_language') == 'english' %}Edit{% else %}ערוך{% endif %}
+                    </button>
+                    <div class="btn-group" role="group">
+                        <button type="button" class="btn btn-success dropdown-toggle" data-bs-toggle="dropdown">
+                            <i class="bi bi-printer me-1"></i>
+                            {% if session.get('preferred_language') == 'english' %}Export{% else %}יצא{% endif %}
+                        </button>
+                        <ul class="dropdown-menu">
+                            <li><a class="dropdown-item"
+                                    href="{{ url_for('shopping_list.generate_html_list', list_id=shopping_list.list_id, lang='hebrew') }}"
+                                    target="_blank">
+                                    <i class="bi bi-file-earmark-text me-2"></i>
+                                    {% if session.get('preferred_language') == 'english' %}HTML (Hebrew){% else %}HTML
+                                    (עברית){% endif %}
+                                </a></li>
+                            <li><a class="dropdown-item"
+                                    href="{{ url_for('shopping_list.generate_html_list', list_id=shopping_list.list_id, lang='english') }}"
+                                    target="_blank">
+                                    <i class="bi bi-file-earmark-text me-2"></i>
+                                    {% if session.get('preferred_language') == 'english' %}HTML (English){% else %}HTML
+                                    (אנגלית){% endif %}
+                                </a></li>
+                            <li>
+                                <hr class="dropdown-divider">
+                            </li>
+                            <li><a class="dropdown-item"
+                                    href="{{ url_for('shopping_list.generate_html_list', list_id=shopping_list.list_id, images='true', download='true') }}">
+                                    <i class="bi bi-download me-2"></i>
+                                    {% if session.get('preferred_language') == 'english' %}Download HTML{% else %}הורד
+                                    HTML{% endif %}
+                                </a></li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Statistics -->
+    <div class="row mb-4">
+        <div class="col-md-3">
+            <div class="card text-center">
+                <div class="card-body">
+                    <h4 class="text-primary mb-1" id="itemCount">{{ shopping_list.get_item_count() }}</h4>
+                    <small class="text-muted">
+                        {% if session.get('preferred_language') == 'english' %}Items{% else %}פריטים{% endif %}
+                    </small>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card text-center">
+                <div class="card-body">
+                    <h4 class="text-success mb-1" id="totalQuantity">{{ shopping_list.get_total_quantity() }}</h4>
+                    <small class="text-muted">
+                        {% if session.get('preferred_language') == 'english' %}Quantity{% else %}כמות{% endif %}
+                    </small>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card text-center">
+                <div class="card-body">
+                    <h4 class="text-info mb-1" id="subtotal">₪{{ "%.2f"|format(totals.subtotal if totals else 0) }}</h4>
+                    <small class="text-muted">
+                        {% if session.get('preferred_language') == 'english' %}Subtotal{% else %}סכום חלקי{% endif %}
+                    </small>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card text-center">
+                <div class="card-body">
+                    <h4 class="text-warning mb-1" id="totalPrice">₪{{ "%.2f"|format(totals.total if totals else
+                        0) }}</h4>
+                    <small class="text-muted">
+                        {% if session.get('preferred_language') == 'english' %}Total{% else %}סה"כ{% endif %}
+                    </small>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Add Item Section -->
+    <div class="card mb-4">
+        <div class="card-header">
+            <h5 class="mb-0">
+                <i class="bi bi-plus-circle me-2"></i>
+                {% if session.get('preferred_language') == 'english' %}
+                Add Product to List
+                {% else %}
+                הוסף מוצר לרשימה
+                {% endif %}
+            </h5>
+        </div>
+        <div class="card-body">
+            <div class="row">
+                <div class="col-md-8">
+                    <a href="{{ url_for('search.search_page') }}" class="btn btn-outline-primary btn-lg w-100">
+                        <i class="bi bi-search me-2"></i>
+                        {% if session.get('preferred_language') == 'english' %}
+                        Search Products to Add
+                        {% else %}
+                        חפש מוצרים להוספה
+                        {% endif %}
+                    </a>
+                </div>
+                <div class="col-md-4 mt-3 mt-md-0">
+                    <button class="btn btn-primary btn-lg w-100" data-bs-toggle="modal" data-bs-target="#addItemModal">
+                        <i class="bi bi-plus me-2"></i>
+                        {% if session.get('preferred_language') == 'english' %}
+                        Add by ID
+                        {% else %}
+                        הוסף לפי מזהה
+                        {% endif %}
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Shopping List Items -->
+    <div class="card">
+        <div class="card-header">
+            <h5 class="mb-0">
+                <i class="bi bi-list-ul me-2"></i>
+                {% if session.get('preferred_language') == 'english' %}
+                Items in List
+                {% else %}
+                פריטים ברשימה
+                {% endif %}
+                <span class="badge bg-primary ms-2" id="itemsBadge">{{ shopping_list.get_item_count() }}</span>
+            </h5>
+        </div>
+        <div class="card-body" id="itemsContainer">
+            {% if shopping_list.items %}
+            <div class="table-responsive">
+                <table class="table table-hover">
+                    <thead>
+                        <tr>
+                            <th>
+                                {% if session.get('preferred_language') == 'english' %}Product{% else %}מוצר{% endif %}
+                            </th>
+                            <th class="text-center">
+                                {% if session.get('preferred_language') == 'english' %}Quantity{% else %}כמות{% endif %}
+                            </th>
+                            <th class="text-end">
+                                {% if session.get('preferred_language') == 'english' %}Unit Price{% else %}מחיר יחידה{%
+                                endif %}
+                            </th>
+                            <th class="text-end">
+                                {% if session.get('preferred_language') == 'english' %}Total{% else %}סה"כ{% endif %}
+                            </th>
+                            <th class="text-center">
+                                {% if session.get('preferred_language') == 'english' %}Actions{% else %}פעולות{% endif
+                                %}
+                            </th>
+                        </tr>
+                    </thead>
+                    <tbody id="itemsTableBody">
+                        {% for item in shopping_list.items %}
+                        <tr data-item-id="{{ item.item_id }}">
+                            <td>
+                                <div class="d-flex align-items-center">
+                                    <!-- Product Image (only show if exists) -->
+                                    {% if item.image_url and item.image_url != 'undefined' and item.image_url != None %}
+                                    <div class="me-3">
+                                        <img src="{{ item.image_url }}" alt="{{ item.menora_id }}" class="rounded"
+                                            style="width: 50px; height: 50px; object-fit: cover;">
+                                    </div>
+                                    {% endif %}
+                                    <!-- Product Info -->
+                                    <div>
+                                        <div class="fw-bold">
+                                            <a href="{{ url_for('search.product_details', product_id=item.menora_id) }}"
+                                                class="text-decoration-none">{{ item.menora_id }}</a>
+                                        </div>
+                                        {% if item.product %}
+                                        <div class="text-muted small">
+                                            {% if session.get('preferred_language') == 'english' %}
+                                            {{ item.product.english_term or item.product.hebrew_term }}
+                                            {% else %}
+                                            {{ item.product.hebrew_term or item.product.english_term }}
+                                            {% endif %}
+                                        </div>
+                                        {% endif %}
+                                        {% if item.notes %}
+                                        <div class="text-info small">
+                                            <i class="bi bi-sticky me-1"></i>{{ item.notes }}
+                                        </div>
+                                        {% endif %}
+                                    </div>
+                                </div>
+                            </td>
+                            <td class="text-center">
+                                <div class="input-group input-group-sm" style="width: 120px;">
+                                    <button class="btn btn-outline-secondary quantity-btn" data-action="decrease"
+                                        data-item-id="{{ item.item_id }}">-</button>
+                                    <input type="number" class="form-control text-center quantity-input"
+                                        value="{{ item.quantity }}" min="1" max="9999"
+                                        data-item-id="{{ item.item_id }}">
+                                    <button class="btn btn-outline-secondary quantity-btn" data-action="increase"
+                                        data-item-id="{{ item.item_id }}">+</button>
+                                </div>
+                            </td>
+                            <td class="text-end">
+                                <span class="fw-bold">₪{{ "%.2f"|format(item.unit_price or 0) }}</span>
+                            </td>
+                            <td class="text-end">
+                                <span class="fw-bold text-primary item-total">₪{{ "%.2f"|format((item.quantity *
+                                    (item.unit_price or 0))) }}</span>
+                            </td>
+                            <td class="text-center">
+                                <div class="btn-group btn-group-sm">
+                                    <button class="btn btn-outline-primary edit-item-btn"
+                                        data-item-id="{{ item.item_id }}"
+                                        title="{% if session.get('preferred_language') == 'english' %}Edit{% else %}ערוך{% endif %}">
+                                        <i class="bi bi-pencil"></i>
+                                    </button>
+                                    <button class="btn btn-outline-danger remove-item-btn"
+                                        data-item-id="{{ item.item_id }}"
+                                        title="{% if session.get('preferred_language') == 'english' %}Remove{% else %}הסר{% endif %}">
+                                        <i class="bi bi-trash"></i>
+                                    </button>
+                                </div>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% else %}
+            <div class="text-center py-5" id="emptyState">
+                <i class="bi bi-cart-x text-muted" style="font-size: 3rem;"></i>
+                <h5 class="mt-3 text-muted">
+                    {% if session.get('preferred_language') == 'english' %}
+                    No items in this list yet
+                    {% else %}
+                    עדיין אין פריטים ברשימה זו
+                    {% endif %}
+                </h5>
+                <p class="text-muted">
+                    {% if session.get('preferred_language') == 'english' %}
+                    Search for products and add them to get started
+                    {% else %}
+                    חפש מוצרים והוסף אותם כדי להתחיל
+                    {% endif %}
+                </p>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+<!-- Add Item Modal -->
+<div class="modal fade" id="addItemModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">
+                    <i class="bi bi-plus-circle me-2"></i>
+                    {% if session.get('preferred_language') == 'english' %}
+                    Add Item by ID
+                    {% else %}
+                    הוסף פריט לפי מזהה
+                    {% endif %}
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <form id="addItemForm">
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label for="productId" class="form-label">
+                            {% if session.get('preferred_language') == 'english' %}
+                            Product ID (Menora ID)
+                            {% else %}
+                            מזהה מוצר (מזהה מנורה)
+                            {% endif %}
+                            <span class="text-danger">*</span>
+                        </label>
+                        <input type="text" class="form-control" id="productId" name="menora_id" required
+                            placeholder="{% if session.get('preferred_language') == 'english' %}Enter product ID{% else %}הזן מזהה מוצר{% endif %}">
+                    </div>
+                    <div class="mb-3">
+                        <label for="productQuantity" class="form-label">
+                            {% if session.get('preferred_language') == 'english' %}
+                            Quantity
+                            {% else %}
+                            כמות
+                            {% endif %}
+                            <span class="text-danger">*</span>
+                        </label>
+                        <input type="number" class="form-control" id="productQuantity" name="quantity" value="1" min="1"
+                            max="9999" required>
+                    </div>
+                    <div class="mb-3">
+                        <label for="productNotes" class="form-label">
+                            {% if session.get('preferred_language') == 'english' %}
+                            Notes
+                            {% else %}
+                            הערות
+                            {% endif %}
+                            <span class="text-muted">({% if session.get('preferred_language') == 'english' %}Optional{%
+                                else %}אופציונלי{% endif %})</span>
+                        </label>
+                        <textarea class="form-control" id="productNotes" name="notes" rows="2" maxlength="200"
+                            placeholder="{% if session.get('preferred_language') == 'english' %}Add notes about this item{% else %}הוסף הערות על הפריט{% endif %}"></textarea>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+                        {% if session.get('preferred_language') == 'english' %}Cancel{% else %}בטל{% endif %}
+                    </button>
+                    <button type="submit" class="btn btn-primary">
+                        <span class="loading-spinner spinner-border spinner-border-sm me-2" role="status"></span>
+                        <i class="bi bi-plus-circle me-2"></i>
+                        {% if session.get('preferred_language') == 'english' %}Add Item{% else %}הוסף פריט{% endif %}
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Edit Item Modal -->
+<div class="modal fade" id="editItemModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">
+                    <i class="bi bi-pencil me-2"></i>
+                    {% if session.get('preferred_language') == 'english' %}
+                    Edit Item
+                    {% else %}
+                    ערוך פריט
+                    {% endif %}
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <form id="editItemForm">
+                <div class="modal-body">
+                    <input type="hidden" id="editItemId" name="item_id">
+                    <div class="mb-3">
+                        <label for="editProductQuantity" class="form-label">
+                            {% if session.get('preferred_language') == 'english' %}
+                            Quantity
+                            {% else %}
+                            כמות
+                            {% endif %}
+                            <span class="text-danger">*</span>
+                        </label>
+                        <input type="number" class="form-control" id="editProductQuantity" name="quantity" min="1"
+                            max="9999" required>
+                    </div>
+                    <div class="mb-3">
+                        <label for="editProductNotes" class="form-label">
+                            {% if session.get('preferred_language') == 'english' %}
+                            Notes
+                            {% else %}
+                            הערות
+                            {% endif %}
+                        </label>
+                        <textarea class="form-control" id="editProductNotes" name="notes" rows="2"
+                            maxlength="200"></textarea>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+                        {% if session.get('preferred_language') == 'english' %}Cancel{% else %}בטל{% endif %}
+                    </button>
+                    <button type="submit" class="btn btn-primary">
+                        <span class="loading-spinner spinner-border spinner-border-sm me-2" role="status"></span>
+                        <i class="bi bi-check-circle me-2"></i>
+                        {% if session.get('preferred_language') == 'english' %}Save Changes{% else %}שמור שינויים{%
+                        endif %}
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Edit List Modal -->
+<div class="modal fade" id="editListModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">
+                    <i class="bi bi-pencil me-2"></i>
+                    {% if session.get('preferred_language') == 'english' %}
+                    Edit Shopping List
+                    {% else %}
+                    ערוך רשימת קניות
+                    {% endif %}
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <form id="editListForm">
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label for="editListName" class="form-label">
+                            {% if session.get('preferred_language') == 'english' %}
+                            List Name
+                            {% else %}
+                            שם הרשימה
+                            {% endif %}
+                            <span class="text-danger">*</span>
+                        </label>
+                        <input type="text" class="form-control" id="editListName" name="list_name"
+                            value="{{ shopping_list.list_name }}" required maxlength="100">
+                    </div>
+                    <div class="mb-3">
+                        <label for="editListDescription" class="form-label">
+                            {% if session.get('preferred_language') == 'english' %}
+                            Description
+                            {% else %}
+                            תיאור
+                            {% endif %}
+                        </label>
+                        <textarea class="form-control" id="editListDescription" name="description" rows="3"
+                            maxlength="500">{{ shopping_list.description or '' }}</textarea>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+                        {% if session.get('preferred_language') == 'english' %}Cancel{% else %}בטל{% endif %}
+                    </button>
+                    <button type="submit" class="btn btn-primary">
+                        <span class="loading-spinner spinner-border spinner-border-sm me-2" role="status"></span>
+                        <i class="bi bi-check-circle me-2"></i>
+                        {% if session.get('preferred_language') == 'english' %}Save Changes{% else %}שמור שינויים{%
+                        endif %}
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    document.addEventListener('DOMContentLoaded', function () {
+        const listId = '{{ shopping_list.list_id }}';
+
+        // Add item form handler
+        const addItemForm = document.getElementById('addItemForm');
+        addItemForm.addEventListener('submit', function (e) {
+            e.preventDefault();
+
+            const productId = document.getElementById('productId').value.trim();
+            const quantity = parseInt(document.getElementById('productQuantity').value);
+            const notes = document.getElementById('productNotes').value.trim();
+
+            if (!productId) {
+                showAlert('{% if session.get("preferred_language") == "english" %}Please enter a product ID.{% else %}אנא הזן מזהה מוצר.{% endif %}', 'warning');
+                return;
+            }
+
+            if (!quantity || quantity < 1) {
+                showAlert('{% if session.get("preferred_language") == "english" %}Please enter a valid quantity.{% else %}אנא הזן כמות תקינה.{% endif %}', 'warning');
+                return;
+            }
+
+            const submitButton = addItemForm.querySelector('button[type="submit"]');
+            setButtonLoading(submitButton, true);
+
+            makeRequest(`{{ url_for("shopping_list.add_item_to_list", list_id=shopping_list.list_id) }}`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    menora_id: productId,
+                    quantity: quantity,
+                    notes: notes || null
+                })
+            })
+                .then(response => {
+                    if (response.success) {
+                        showAlert('{% if session.get("preferred_language") == "english" %}Item added successfully!{% else %}הפריט נוסף בהצלחה!{% endif %}', 'success');
+                        setTimeout(() => {
+                            window.location.reload();
+                        }, 1500);
+                    } else {
+                        throw new Error(response.error);
+                    }
+                })
+                .catch(error => {
+                    console.error('Error adding item:', error);
+                    showAlert('{% if session.get("preferred_language") == "english" %}Failed to add item.{% else %}הוספת הפריט נכשלה.{% endif %}', 'danger');
+                })
+                .finally(() => {
+                    setButtonLoading(submitButton, false);
+                });
+        });
+
+        // Quantity button handlers
+        document.querySelectorAll('.quantity-btn').forEach(btn => {
+            btn.addEventListener('click', function () {
+                const action = this.dataset.action;
+                const itemId = this.dataset.itemId;
+                const input = this.parentNode.querySelector('.quantity-input');
+                let currentValue = parseInt(input.value);
+
+                if (action === 'increase') {
+                    currentValue = Math.min(currentValue + 1, 9999);
+                } else if (action === 'decrease' && currentValue > 1) {
+                    currentValue = Math.max(currentValue - 1, 1);
+                }
+
+                input.value = currentValue;
+                updateItemQuantity(itemId, currentValue);
+            });
+        });
+
+        // Quantity input change handlers
+        document.querySelectorAll('.quantity-input').forEach(input => {
+            input.addEventListener('change', function () {
+                const itemId = this.dataset.itemId;
+                let quantity = parseInt(this.value);
+
+                if (isNaN(quantity) || quantity < 1) {
+                    quantity = 1;
+                    this.value = quantity;
+                } else if (quantity > 9999) {
+                    quantity = 9999;
+                    this.value = quantity;
+                }
+
+                updateItemQuantity(itemId, quantity);
+            });
+        });
+
+        function updateItemQuantity(itemId, quantity) {
+            const row = document.querySelector(`tr[data-item-id="${itemId}"]`);
+            const quantityButtons = row.querySelectorAll('.quantity-btn');
+            const quantityInput = row.querySelector('.quantity-input');
+
+            // Disable quantity controls during update
+            quantityButtons.forEach(btn => setButtonLoading(btn, true));
+            quantityInput.disabled = true;
+
+            makeRequest(`{{ url_for("shopping_list.update_item_in_list", list_id=shopping_list.list_id, item_id="ITEM_ID") }}`.replace('ITEM_ID', itemId), {
+                method: 'PUT',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    quantity: quantity
+                })
+            })
+                .then(response => {
+                    if (response.success) {
+                        // Update item total in the row
+                        const unitPriceText = row.querySelector('.fw-bold').textContent;
+                        const unitPrice = parseFloat(unitPriceText.replace('₪', '').replace(',', ''));
+                        const itemTotal = row.querySelector('.item-total');
+                        itemTotal.textContent = `₪${(quantity * unitPrice).toFixed(2)}`;
+
+                        // Update statistics
+                        updateStatistics(response.data.totals);
+                    } else {
+                        throw new Error(response.error);
+                    }
+                })
+                .catch(error => {
+                    console.error('Error updating quantity:', error);
+                    showAlert('{% if session.get("preferred_language") == "english" %}Failed to update quantity.{% else %}עדכון הכמות נכשל.{% endif %}', 'danger');
+                })
+                .finally(() => {
+                    // Re-enable quantity controls
+                    quantityButtons.forEach(btn => setButtonLoading(btn, false));
+                    quantityInput.disabled = false;
+                });
+        }
+
+        // Edit item handlers
+        document.querySelectorAll('.edit-item-btn').forEach(btn => {
+            btn.addEventListener('click', function () {
+                const itemId = this.dataset.itemId;
+                const row = document.querySelector(`tr[data-item-id="${itemId}"]`);
+                const quantityInput = row.querySelector('.quantity-input');
+                const notesElement = row.querySelector('.text-info.small');
+
+                document.getElementById('editItemId').value = itemId;
+                document.getElementById('editProductQuantity').value = quantityInput.value;
+                document.getElementById('editProductNotes').value = notesElement ?
+                    notesElement.textContent.replace(/^.*?(\S.*?)$/, '$1') : '';
+
+                new bootstrap.Modal(document.getElementById('editItemModal')).show();
+            });
+        });
+
+        // Edit item form handler
+        const editItemForm = document.getElementById('editItemForm');
+        editItemForm.addEventListener('submit', function (e) {
+            e.preventDefault();
+
+            const itemId = document.getElementById('editItemId').value;
+            const quantity = parseInt(document.getElementById('editProductQuantity').value);
+            const notes = document.getElementById('editProductNotes').value.trim();
+
+            if (!quantity || quantity < 1) {
+                showAlert('{% if session.get("preferred_language") == "english" %}Please enter a valid quantity.{% else %}אנא הזן כמות תקינה.{% endif %}', 'warning');
+                return;
+            }
+
+            const submitButton = editItemForm.querySelector('button[type="submit"]');
+            setButtonLoading(submitButton, true);
+
+            makeRequest(`{{ url_for("shopping_list.update_item_in_list", list_id=shopping_list.list_id, item_id="ITEM_ID") }}`.replace('ITEM_ID', itemId), {
+                method: 'PUT',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    quantity: quantity,
+                    notes: notes || null
+                })
+            })
+                .then(response => {
+                    if (response.success) {
+                        showAlert('{% if session.get("preferred_language") == "english" %}Item updated successfully!{% else %}הפריט עודכן בהצלחה!{% endif %}', 'success');
+                        setTimeout(() => {
+                            window.location.reload();
+                        }, 1500);
+                    } else {
+                        throw new Error(response.error);
+                    }
+                })
+                .catch(error => {
+                    console.error('Error updating item:', error);
+                    showAlert('{% if session.get("preferred_language") == "english" %}Failed to update item.{% else %}עדכון הפריט נכשל.{% endif %}', 'danger');
+                })
+                .finally(() => {
+                    setButtonLoading(submitButton, false);
+                });
+        });
+
+        // Remove item handlers
+        document.querySelectorAll('.remove-item-btn').forEach(btn => {
+            btn.addEventListener('click', function () {
+                const itemId = this.dataset.itemId;
+                const row = document.querySelector(`tr[data-item-id="${itemId}"]`);
+                const productIdElement = row.querySelector('.fw-bold');
+                const productId = productIdElement ? productIdElement.textContent.trim() : 'this item';
+
+                if (confirm('{% if session.get("preferred_language") == "english" %}Are you sure you want to remove "' + productId + '"?{% else %}האם אתה בטוח שברצונך להסיר את "' + productId + '"?{% endif %}')) {
+                    const removeButton = this;
+                    setButtonLoading(removeButton, true);
+
+                    makeRequest(`{{ url_for("shopping_list.remove_item_from_list", list_id=shopping_list.list_id, item_id="ITEM_ID") }}`.replace('ITEM_ID', itemId), {
+                        method: 'DELETE'
+                    })
+                        .then(response => {
+                            if (response.success) {
+                                showAlert('{% if session.get("preferred_language") == "english" %}Item removed successfully!{% else %}הפריט הוסר בהצלחה!{% endif %}', 'success');
+                                row.remove();
+
+                                // Update statistics
+                                updateStatistics(response.data.totals);
+
+                                // Check if no items remain
+                                if (document.querySelectorAll('tr[data-item-id]').length === 0) {
+                                    setTimeout(() => {
+                                        window.location.reload();
+                                    }, 1500);
+                                }
+                            } else {
+                                throw new Error(response.error);
+                            }
+                        })
+                        .catch(error => {
+                            console.error('Error removing item:', error);
+                            showAlert('{% if session.get("preferred_language") == "english" %}Failed to remove item.{% else %}הסרת הפריט נכשלה.{% endif %}', 'danger');
+                            setButtonLoading(removeButton, false);
+                        });
+                }
+            });
+        });
+
+        // Edit list form handler
+        const editListForm = document.getElementById('editListForm');
+        editListForm.addEventListener('submit', function (e) {
+            e.preventDefault();
+
+            const listName = document.getElementById('editListName').value.trim();
+            const description = document.getElementById('editListDescription').value.trim();
+
+            if (!listName) {
+                showAlert('{% if session.get("preferred_language") == "english" %}Please enter a list name.{% else %}אנא הזן שם רשימה.{% endif %}', 'warning');
+                return;
+            }
+
+            const submitButton = editListForm.querySelector('button[type="submit"]');
+            setButtonLoading(submitButton, true);
+
+            makeRequest(`{{ url_for("shopping_list.update_shopping_list", list_id=shopping_list.list_id) }}`, {
+                method: 'PUT',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    list_name: listName,
+                    description: description || null
+                })
+            })
+                .then(response => {
+                    if (response.success) {
+                        showAlert('{% if session.get("preferred_language") == "english" %}Shopping list updated successfully!{% else %}רשימת הקניות עודכנה בהצלחה!{% endif %}', 'success');
+                        setTimeout(() => {
+                            window.location.reload();
+                        }, 1500);
+                    } else {
+                        throw new Error(response.error);
+                    }
+                })
+                .catch(error => {
+                    console.error('Error updating list:', error);
+                    showAlert('{% if session.get("preferred_language") == "english" %}Failed to update shopping list.{% else %}עדכון רשימת הקניות נכשל.{% endif %}', 'danger');
+                })
+                .finally(() => {
+                    setButtonLoading(submitButton, false);
+                });
+        });
+
+        function updateStatistics(totals) {
+            if (totals) {
+                document.getElementById('itemCount').textContent = totals.item_count || 0;
+                document.getElementById('totalQuantity').textContent = totals.total_quantity || 0;
+                document.getElementById('subtotal').textContent = `₪${(totals.subtotal || 0).toFixed(2)}`;
+                document.getElementById('totalPrice').textContent = `₪${(totals.total || 0).toFixed(2)}`;
+                document.getElementById('itemsBadge').textContent = totals.item_count || 0;
+            }
+        }
+    });
+</script>
+{% endblock %}
