@@ -8,7 +8,10 @@
       "Bash(gcloud iam service-accounts keys:*)",
       "Bash(FLASK_ENV=production python3 migrate_to_firestore.py --skip-existing --no-backup --verbose)",
       "Bash(GOOGLE_APPLICATION_CREDENTIALS=\"firebase-credentials-shoparound.json\" FLASK_ENV=production python3 migrate_to_firestore.py --skip-existing --no-backup --verbose)",
-      "Bash(./pushdeploy.sh)"
+      "Bash(./pushdeploy.sh)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "Bash(git push:*)"
     ],
     "deny": [],
     "ask": []

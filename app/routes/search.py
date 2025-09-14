@@ -6,7 +6,6 @@ import logging
 from flask import Blueprint, render_template, request, jsonify, current_app, session
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
-from flask_wtf.csrf import exempt
 
 from app.services.search_service import SearchService
 from app.routes.auth import login_required
@@ -53,7 +52,6 @@ def search_page():
 
 
 @search_bp.route('/text', methods=['POST'])
-@exempt
 def text_search():
     """Text search endpoint."""
     try:
@@ -89,7 +87,6 @@ def text_search():
 
 
 @search_bp.route('/filter', methods=['POST'])
-@exempt
 def filter_search():
     """Filtered search endpoint."""
     try:
@@ -125,7 +122,6 @@ def filter_search():
 
 
 @search_bp.route('/combined', methods=['POST'])
-@exempt
 def combined_search():
     """Combined text and filter search endpoint."""
     try:
