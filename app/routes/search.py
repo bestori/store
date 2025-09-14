@@ -17,9 +17,11 @@ logger = logging.getLogger(__name__)
 def get_search_service() -> SearchService:
     """Get singleton search service instance from app."""
     if not hasattr(current_app, 'search_service') or current_app.search_service is None:
-        if not hasattr(current_app, 'excel_data') or not current_app.excel_data:
-            raise RuntimeError("Excel data not loaded")
-        current_app.search_service = SearchService(current_app.excel_data)
+        if hasattr(current_app, 'database_service') and current_app.database_service:
+            # Create search service with database
+            current_app.search_service = SearchService(current_app.excel_data, database_service=current_app.database_service)
+        else:
+            raise RuntimeError("Database service not available")
     return current_app.search_service
 
 
