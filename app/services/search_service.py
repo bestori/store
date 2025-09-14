@@ -80,15 +80,42 @@ class SearchService:
                 
                 execution_time = time.time() - start_time
                 
-                # Convert to SearchResult format - create simple Product-like objects
+                # Convert to SearchResult format - create properly formatted Product objects
                 simple_products = []
                 for db_product in paginated_results:
-                    # Create a simple object that has to_dict method
+                    # Create a properly formatted product object
                     class SimpleProduct:
                         def __init__(self, db_data):
                             self.db_data = db_data
+                        
                         def to_dict(self):
-                            return self.db_data
+                            # Map database fields to frontend expected fields
+                            import json
+                            
+                            # Parse JSON fields safely
+                            try:
+                                specs = json.loads(self.db_data.get('specifications', '{}')) if self.db_data.get('specifications') else {}
+                            except:
+                                specs = {}
+                                
+                            return {
+                                'id': self.db_data.get('id'),
+                                'menora_id': self.db_data.get('menora_id', ''),
+                                'hebrew': self.db_data.get('name_hebrew', ''),
+                                'english': self.db_data.get('name_english', ''),
+                                'price': self.db_data.get('price', 0),
+                                'currency': '₪',
+                                'type': specs.get('type', ''),
+                                'material': self.db_data.get('material', '') or specs.get('material', ''),
+                                'height': specs.get('height', ''),
+                                'width': specs.get('width', ''),
+                                'thickness': specs.get('thickness', ''),
+                                'category': self.db_data.get('category', ''),
+                                'subcategory': self.db_data.get('subcategory', ''),
+                                'image_url': None,
+                                'has_image': False
+                            }
+                    
                     simple_products.append(SimpleProduct(db_product))
                 
                 from app.models.search_result import SearchResult, SearchPagination, SearchInfo
