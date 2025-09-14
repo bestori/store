@@ -183,21 +183,22 @@ def load_excel():
         
         # Insert products into database
         for product in products:
+            # Extract data from Product dataclass
             product_data = {
-                'menora_id': product.get('menora_id', ''),
-                'name_hebrew': product.get('name_hebrew', ''),
-                'name_english': product.get('name_english', ''),
-                'description_hebrew': product.get('description_hebrew', ''),
-                'description_english': product.get('description_english', ''),
-                'price': product.get('price', 0),
-                'category': product.get('category', ''),
-                'subcategory': product.get('subcategory', ''),
-                'specifications': product.get('specifications', {}),
-                'dimensions': product.get('dimensions', {}),
-                'weight': product.get('weight', 0),
-                'material': product.get('material', ''),
-                'coating': product.get('coating', ''),
-                'standard': product.get('standard', '')
+                'menora_id': product.menora_id,
+                'name_hebrew': product.descriptions.hebrew if product.descriptions else '',
+                'name_english': product.descriptions.english if product.descriptions else '',
+                'description_hebrew': product.descriptions.hebrew if product.descriptions else '',
+                'description_english': product.descriptions.english if product.descriptions else '',
+                'price': product.pricing.price if product.pricing else 0,
+                'category': product.category,
+                'subcategory': product.subcategory or '',
+                'specifications': product.specifications.to_dict() if product.specifications else {},
+                'dimensions': {},
+                'weight': product.specifications.weight if product.specifications and product.specifications.weight else 0,
+                'material': product.specifications.material if product.specifications and product.specifications.material else '',
+                'coating': product.specifications.finish if product.specifications and product.specifications.finish else '',
+                'standard': ''
             }
             
             # Convert dict/list fields to JSON strings for PostgreSQL
