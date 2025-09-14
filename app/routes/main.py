@@ -12,8 +12,154 @@ logger = logging.getLogger(__name__)
 
 @main_bp.route('/health')
 def health():
-    """Simple health check endpoint."""
-    return {'status': 'healthy', 'timestamp': datetime.now().isoformat()}
+    """Comprehensive health check endpoint with detailed diagnostics."""
+    import os
+    import sys
+    import traceback
+    
+    status = {
+        'timestamp': datetime.now().isoformat(),
+        'app_status': 'running',
+        'python_version': sys.version,
+        'environment': dict(os.environ),
+        'database': {},
+        'excel_files': {},
+        'services': {},
+        'errors': [],
+        'warnings': []
+    }
+    
+    # Check database connection
+    try:
+        if hasattr(current_app, 'database_service') and current_app.database_service:
+            db_service = current_app.database_service
+            status['database']['service_exists'] = True
+            status['database']['is_available'] = db_service.is_available()
+            
+            if db_service.is_available():
+                try:
+                    # Test database connection
+                    status['database']['connection_test'] = 'attempting...'
+                    test_result = db_service.execute_query("SELECT 1 as test")
+                    status['database']['connection_test'] = f'success: {test_result}'
+                    
+                    # Get product count
+                    product_count = db_service.get_products_count()
+                    status['database']['products_count'] = product_count
+                    
+                    # Test table existence
+                    tables_query = """
+                    SELECT table_name FROM information_schema.tables 
+                    WHERE table_schema = 'public'
+                    """
+                    tables = db_service.execute_query(tables_query)
+                    status['database']['tables'] = [t['table_name'] for t in tables]
+                    
+                except Exception as db_error:
+                    status['database']['connection_test'] = f'failed: {str(db_error)}'
+                    status['errors'].append(f'Database query error: {str(db_error)}')
+                    status['errors'].append(f'Database traceback: {traceback.format_exc()}')
+            else:
+                status['database']['connection_test'] = 'service not available'
+        else:
+            status['database']['service_exists'] = False
+            status['warnings'].append('database_service not found in current_app')
+    except Exception as e:
+        status['database']['error'] = str(e)
+        status['errors'].append(f'Database check error: {str(e)}')
+        status['errors'].append(f'Database check traceback: {traceback.format_exc()}')
+    
+    # Check Excel files
+    try:
+        excel_dir = os.path.join(os.getcwd(), 'data', 'excel_files')
+        status['excel_files']['directory_path'] = excel_dir
+        status['excel_files']['directory_exists'] = os.path.exists(excel_dir)
+        status['excel_files']['cwd'] = os.getcwd()
+        
+        if os.path.exists(excel_dir):
+            files = os.listdir(excel_dir)
+            status['excel_files']['files_found'] = len(files)
+            status['excel_files']['files_list'] = []
+            
+            for file in files:
+                file_path = os.path.join(excel_dir, file)
+                file_info = {
+                    'name': file,
+                    'size': os.path.getsize(file_path),
+                    'readable': os.access(file_path, os.R_OK)
+                }
+                status['excel_files']['files_list'].append(file_info)
+        else:
+            status['excel_files']['files_found'] = 0
+            status['excel_files']['files_list'] = []
+            status['warnings'].append(f'Excel directory not found: {excel_dir}')
+            
+            # Try to find data directory
+            possible_paths = [
+                'data/excel_files',
+                './data/excel_files',
+                '../data/excel_files',
+                '/app/data/excel_files'
+            ]
+            for path in possible_paths:
+                if os.path.exists(path):
+                    status['excel_files'][f'found_alternative'] = path
+                    break
+                    
+    except Exception as e:
+        status['excel_files']['error'] = str(e)
+        status['errors'].append(f'Excel files check error: {str(e)}')
+    
+    # Check app services
+    try:
+        services_to_check = ['database_service', 'search_service', 'excel_data', 'session_manager']
+        for service_name in services_to_check:
+            if hasattr(current_app, service_name):
+                service = getattr(current_app, service_name)
+                status['services'][service_name] = {
+                    'exists': True,
+                    'type': str(type(service)),
+                    'value': str(service) if service is not None else 'None'
+                }
+                
+                # Special checks for excel_data
+                if service_name == 'excel_data' and isinstance(service, dict):
+                    status['services'][service_name]['keys'] = list(service.keys())
+                    status['services'][service_name]['loading'] = service.get('loading', 'unknown')
+                    status['services'][service_name]['loaded'] = service.get('loaded', 'unknown')
+                    status['services'][service_name]['products_count'] = len(service.get('products', []))
+            else:
+                status['services'][service_name] = {'exists': False}
+    except Exception as e:
+        status['services']['error'] = str(e)
+        status['errors'].append(f'Services check error: {str(e)}')
+    
+    # Check configuration
+    try:
+        config_keys = ['DATABASE_URL', 'FLASK_ENV', 'DB_PASSWORD', 'CLOUD_SQL_CONNECTION_NAME']
+        status['config'] = {}
+        for key in config_keys:
+            env_value = os.environ.get(key)
+            if env_value:
+                # Mask passwords
+                if 'PASSWORD' in key or 'SECRET' in key:
+                    status['config'][key] = f"{'*' * (len(env_value) - 4)}{env_value[-4:]}" if len(env_value) > 4 else "***"
+                else:
+                    status['config'][key] = env_value
+            else:
+                status['config'][key] = 'not_set'
+    except Exception as e:
+        status['config'] = {'error': str(e)}
+    
+    # Overall health assessment
+    if status['errors']:
+        status['overall_status'] = 'unhealthy'
+    elif status['warnings']:
+        status['overall_status'] = 'degraded'
+    else:
+        status['overall_status'] = 'healthy'
+    
+    return jsonify(status)
 
 
 @main_bp.route('/')
