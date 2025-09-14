@@ -159,13 +159,20 @@ def add_item_to_default_list():
         user_code = session.get('user_code')
         logger.info(f"User code from session: {user_code}")
         
-        # Get user by code instead of validating session (simpler approach)
-        user = user_service.get_user_by_code(user_code)
-        logger.info(f"User lookup result: {user}")
+        # Get user data from database and create User object
+        from app.services.database_service import DatabaseService
+        database_service = current_app.database_service
+        user_data = database_service.get_user_by_code(user_code)
+        logger.info(f"User data from DB: {user_data}")
         
-        if not user:
+        if not user_data:
             logger.error(f"User not found for user_code: {user_code}")
             return jsonify({'success': False, 'error': 'User not found', 'debug': 'User lookup failed'}), 401
+        
+        # Create User object from database data
+        from app.models.user import User
+        user = User.from_dict(user_data)
+        logger.info(f"User object created: {user}")
         
         # Get or create default list
         if not user.default_list_id:
