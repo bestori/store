@@ -55,7 +55,7 @@ class ShoppingListService:
             shopping_lists = []
             for row in results:
                 # Convert database row to ShoppingList object
-                shopping_list = ShoppingList.from_dict(row)
+                shopping_list = ShoppingList.from_database_dict(row)
                 shopping_lists.append(shopping_list)
             
             self.logger.debug(f"Retrieved {len(shopping_lists)} shopping lists for user {user.user_code}")
@@ -85,7 +85,7 @@ class ShoppingListService:
             )
             
             if results:
-                shopping_list = ShoppingList.from_dict(results[0])
+                shopping_list = ShoppingList.from_database_dict(results[0])
                 return shopping_list
             
             return None
@@ -540,7 +540,7 @@ class ShoppingListService:
             
             if existing_lists:
                 # Return the most recent list
-                return ShoppingList.from_dict(existing_lists[0])
+                return ShoppingList.from_database_dict(existing_lists[0])
             
             # No lists exist, create a default one
             default_name = f"My Shopping List"

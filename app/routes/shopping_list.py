@@ -35,11 +35,18 @@ def shopping_lists_page():
     try:
         user_service, shopping_list_service, _, _ = get_services()
         
-        # Get current user
-        user = user_service.validate_session(session.get('session_id'))
-        if not user:
+        # Get current user - use same simple method as add-to-cart
+        user_code = session.get('user_code')
+        database_service = current_app.database_service
+        user_data = database_service.get_user_by_code(user_code)
+        
+        if not user_data:
             session.clear()
             return redirect(url_for('auth.login'))
+        
+        # Create User object
+        from app.models.user import User
+        user = User.from_dict(user_data)
         
         # Get user's shopping lists
         shopping_lists = shopping_list_service.get_user_shopping_lists(user)
@@ -65,7 +72,9 @@ def create_shopping_list():
         user_service, shopping_list_service, _, _ = get_services()
         
         # Get current user
-        user = user_service.validate_session(session.get('session_id'))
+        user_code = session.get('user_code')
+        user_data = current_app.database_service.get_user_by_code(user_code)
+        user = User.from_dict(user_data) if user_data else None
         if not user:
             return jsonify({'success': False, 'error': 'Not authenticated'}), 401
         
@@ -118,7 +127,10 @@ def view_shopping_list(list_id):
         user_service, shopping_list_service, price_calculator, _ = get_services()
         
         # Get current user
-        user = user_service.validate_session(session.get('session_id'))
+        user_code = session.get('user_code')
+        user_data = current_app.database_service.get_user_by_code(user_code)
+        from app.models.user import User
+        user = User.from_dict(user_data) if user_data else None
         if not user:
             session.clear()
             return redirect(url_for('auth.login'))
@@ -141,6 +153,77 @@ def view_shopping_list(list_id):
         return render_template('error.html', 
                              error_message="An error occurred loading the shopping list."), 500
 
+
+@shopping_list_bp.route('/debug-db', methods=['GET'])
+@login_required  
+def debug_database():
+    """Debug endpoint to show raw database contents"""
+    try:
+        database_service = current_app.database_service
+        
+        # Get all shopping lists
+        all_lists = database_service.execute_query("SELECT * FROM shopping_lists ORDER BY created_at DESC LIMIT 10")
+        
+        # Get all users
+        all_users = database_service.execute_query("SELECT user_id, user_code, preferences FROM users ORDER BY created_at DESC LIMIT 5")
+        
+        return jsonify({
+            'all_shopping_lists': all_lists,
+            'all_users': all_users
+        })
+        
+    except Exception as e:
+        return jsonify({'error': str(e)})
+
+@shopping_list_bp.route('/debug-user', methods=['GET'])
+@login_required
+def debug_user_info():
+    """Debug endpoint to show user and shopping list info"""
+    try:
+        import json
+        from app.services.database_service import DatabaseService
+        from app.models.user import User
+        
+        # Get user info
+        user_code = session.get('user_code')
+        database_service = current_app.database_service
+        user_data = database_service.get_user_by_code(user_code)
+        
+        if not user_data:
+            return jsonify({'error': 'User not found', 'user_code': user_code})
+        
+        user = User.from_dict(user_data)
+        
+        # Get shopping lists for user
+        shopping_lists = database_service.execute_query(
+            "SELECT * FROM shopping_lists WHERE user_id = :user_id",
+            {'user_id': user.user_id}
+        )
+        
+        # Get shopping list items (from JSONB column, not separate table)
+        items = []
+        for shopping_list in shopping_lists:
+            if shopping_list.get('items'):
+                try:
+                    list_items = json.loads(shopping_list['items']) if isinstance(shopping_list['items'], str) else shopping_list['items']
+                    items.extend(list_items)
+                except:
+                    pass
+        
+        return jsonify({
+            'user': {
+                'user_id': user.user_id,
+                'user_code': user.user_code,
+                'default_list_id': user.default_list_id,
+                'active_lists': user.active_lists
+            },
+            'shopping_lists': shopping_lists,
+            'shopping_list_items': items,
+            'session': dict(session)
+        })
+        
+    except Exception as e:
+        return jsonify({'error': str(e)})
 
 @shopping_list_bp.route('/add-item', methods=['POST'])
 @login_required
@@ -190,6 +273,7 @@ def add_item_to_default_list():
             # Create a simple default list directly in database
             logger.info("No existing lists, creating minimal default list")
             import uuid
+            import json
             from datetime import datetime
             
             list_id = str(uuid.uuid4())
@@ -197,30 +281,35 @@ def add_item_to_default_list():
             # Insert directly into database
             try:
                 database_service = current_app.database_service
-                database_service.execute_query(
+                logger.info(f"INSERT user_id: {user.user_id}")
+                database_service.execute_update(
                     """INSERT INTO shopping_lists 
-                       (list_id, user_id, list_name, description, created_at, updated_at) 
-                       VALUES (:list_id, :user_id, :list_name, :description, :created_at, :updated_at)""",
+                       (list_id, user_id, name, status, items) 
+                       VALUES (:list_id, :user_id, :name, :status, :items)
+                       ON CONFLICT (list_id) DO NOTHING""",
                     {
                         'list_id': list_id,
                         'user_id': user.user_id,
-                        'list_name': 'My Shopping List',
-                        'description': 'Default shopping list',
-                        'created_at': datetime.utcnow(),
-                        'updated_at': datetime.utcnow()
+                        'name': 'My Shopping List',
+                        'status': 'active',
+                        'items': '[]'  # Empty JSON array
                     }
                 )
                 
-                # Update user to set this as default
-                user.add_shopping_list(list_id, set_as_default=True)
-                database_service.execute_query(
-                    "UPDATE users SET active_lists = :active_lists, default_list_id = :default_list_id WHERE user_id = :user_id",
-                    {
-                        'active_lists': str(user.active_lists),  # Convert to string for storage
-                        'default_list_id': list_id,
-                        'user_id': user.user_id
-                    }
-                )
+                # Update user's default list preference
+                try:
+                    database_service.execute_update(
+                        """UPDATE users 
+                           SET preferences = jsonb_set(preferences, '{defaultListId}', :default_list_id)
+                           WHERE user_id = :user_id""",
+                        {
+                            'default_list_id': f'"{list_id}"',  # JSON string value
+                            'user_id': user.user_id
+                        }
+                    )
+                    logger.info(f"Updated user default list to: {list_id}")
+                except Exception as e:
+                    logger.warning(f"Failed to update user default list: {e}")
                 
                 logger.info(f"Created minimal default list ID: {list_id}")
                 
@@ -228,21 +317,8 @@ def add_item_to_default_list():
                 logger.error(f"Failed to create minimal default list: {e}")
                 return jsonify({'success': False, 'error': f'Could not create shopping list: {str(e)}'}), 500
         
-        # Instead of using complex shopping_list_service, just verify list exists
-        logger.info(f"Checking if shopping list exists: {list_id}")
-        
-        # Verify shopping list exists in database
-        database_service = current_app.database_service
-        list_check = database_service.execute_query(
-            "SELECT list_id, list_name FROM shopping_lists WHERE list_id = :list_id AND user_id = :user_id",
-            {'list_id': list_id, 'user_id': user.user_id}
-        )
-        
-        if not list_check:
-            logger.error(f"Shopping list not found in database for list_id: {list_id}")
-            return jsonify({'success': False, 'error': 'Shopping list not found'}), 404
-        
-        logger.info(f"Shopping list verified: {list_check[0]['list_name']}")
+        # Skip verification - assume list exists and proceed directly to add item
+        logger.info(f"Proceeding to add item to list_id: {list_id}")
         
         # Get form data
         menora_id = (request.json.get('menora_id') or '').strip()
@@ -269,30 +345,68 @@ def add_item_to_default_list():
         logger.info(f"Adding item to database - menora_id: {menora_id}, quantity: {quantity}")
         
         try:
-            # Insert shopping list item directly
+            # Look up complete product data from database
+            product_data = database_service.execute_query(
+                """SELECT price, name_hebrew, name_english, 
+                          CASE 
+                            WHEN specifications::text LIKE '%image_url%' 
+                            THEN specifications->>'image_url'
+                            ELSE NULL 
+                          END as image_url
+                   FROM products WHERE menora_id = :menora_id""",
+                {'menora_id': menora_id}
+            )
+            
+            if product_data and product_data[0]:
+                product_info = product_data[0]
+                unit_price = float(product_info['price']) if product_info['price'] else 0.0
+                name_hebrew = product_info.get('name_hebrew', '')
+                name_english = product_info.get('name_english', '')  
+                image_url = product_info.get('image_url')
+                logger.info(f"Found product: {name_hebrew} / {name_english}, price: {unit_price}")
+            else:
+                unit_price = 0.0
+                name_hebrew = ''
+                name_english = ''
+                image_url = None
+                logger.warning(f"Product not found: {menora_id}")
+            
+            # Add item to shopping list using JSONB items column
             import uuid
+            import json
             from datetime import datetime
             
             item_id = str(uuid.uuid4())
             
-            database_service.execute_query(
-                """INSERT INTO shopping_list_items 
-                   (item_id, list_id, menora_id, quantity, notes, added_at) 
-                   VALUES (:item_id, :list_id, :menora_id, :quantity, :notes, :added_at)""",
-                {
-                    'item_id': item_id,
-                    'list_id': list_id,
-                    'menora_id': menora_id,
-                    'quantity': quantity,
-                    'notes': notes,
-                    'added_at': datetime.utcnow()
-                }
-            )
+            # Create item data for JSONB storage
+            item_data = {
+                'item_id': item_id,
+                'menora_id': menora_id,
+                'quantity': quantity,
+                'unit_price': float(unit_price),
+                'notes': notes,
+                'added_at': datetime.utcnow().isoformat(),
+                'product': {
+                    'hebrew_term': name_hebrew,
+                    'english_term': name_english
+                },
+                'image_url': image_url
+            }
             
-            # Update shopping list timestamp
-            database_service.execute_query(
-                "UPDATE shopping_lists SET updated_at = :updated_at WHERE list_id = :list_id",
-                {'updated_at': datetime.utcnow(), 'list_id': list_id}
+            # Add item to the JSONB items array and update timestamp and total price
+            item_total = quantity * unit_price
+            database_service.execute_update(
+                """UPDATE shopping_lists 
+                   SET items = items || :new_item,
+                       updated_at = :updated_at,
+                       total_price = COALESCE(total_price, 0) + :item_total
+                   WHERE list_id = :list_id""",
+                {
+                    'new_item': json.dumps([item_data]),  # Add as array element
+                    'list_id': list_id,
+                    'updated_at': datetime.utcnow(),
+                    'item_total': item_total
+                }
             )
             
             logger.info(f"Item added successfully to database")
@@ -302,7 +416,7 @@ def add_item_to_default_list():
                 'success': True,
                 'message': 'Item added to shopping list',
                 'item_id': item_id,
-                'redirect_url': '/shopping-list'
+                'redirect_url': f'/shopping-list/{list_id}'
             })
             
         except Exception as e:
@@ -329,7 +443,9 @@ def add_item_to_list(list_id):
         user_service, shopping_list_service, _, _ = get_services()
         
         # Get current user
-        user = user_service.validate_session(session.get('session_id'))
+        user_code = session.get('user_code')
+        user_data = current_app.database_service.get_user_by_code(user_code)
+        user = User.from_dict(user_data) if user_data else None
         if not user:
             return jsonify({'success': False, 'error': 'Not authenticated'}), 401
         
@@ -399,17 +515,14 @@ def add_item_to_list(list_id):
 def update_item_in_list(list_id, item_id):
     """Update item in shopping list."""
     try:
-        user_service, shopping_list_service, _, _ = get_services()
-        
-        # Get current user
-        user = user_service.validate_session(session.get('session_id'))
+        # Get current user - use simple database method
+        user_code = session.get('user_code')
+        database_service = current_app.database_service
+        user_data = database_service.get_user_by_code(user_code)
+        from app.models.user import User
+        user = User.from_dict(user_data) if user_data else None
         if not user:
             return jsonify({'success': False, 'error': 'Not authenticated'}), 401
-        
-        # Get shopping list
-        shopping_list = shopping_list_service.get_shopping_list(list_id, user)
-        if not shopping_list:
-            return jsonify({'success': False, 'error': 'Shopping list not found'}), 404
         
         # Get form data
         quantity = request.json.get('quantity')
@@ -418,39 +531,97 @@ def update_item_in_list(list_id, item_id):
         if quantity is not None:
             try:
                 quantity = int(quantity)
-                if quantity < 0:
-                    raise ValueError("Quantity cannot be negative")
+                if quantity <= 0:
+                    # If quantity is 0 or negative, remove the item instead
+                    return redirect(url_for('shopping_list.remove_item_from_list', list_id=list_id, item_id=item_id))
             except (ValueError, TypeError):
                 return jsonify({
                     'success': False,
                     'error': 'Invalid quantity'
                 }), 400
         
-        # Update item
-        success = shopping_list_service.update_item_in_list(
-            shopping_list=shopping_list,
-            item_id=item_id,
-            quantity=quantity,
-            notes=notes
-        )
-        
-        if success:
-            # Get updated totals
-            totals = shopping_list_service.calculate_list_totals(shopping_list)
+        # Update item directly in database JSONB
+        try:
+            # Get the shopping list to find the item
+            shopping_list_data = database_service.execute_query(
+                "SELECT items FROM shopping_lists WHERE list_id = :list_id AND user_id = :user_id",
+                {'list_id': list_id, 'user_id': user.user_id}
+            )
             
-            return jsonify({
-                'success': True,
-                'data': {
-                    'list_id': shopping_list.list_id,
-                    'item_count': shopping_list.get_item_count(),
-                    'totals': totals
-                },
-                'message': 'Item updated successfully'
-            })
-        else:
+            if not shopping_list_data:
+                return jsonify({'success': False, 'error': 'Shopping list not found'}), 404
+            
+            items = shopping_list_data[0]['items']
+            if isinstance(items, str):
+                import json
+                items = json.loads(items)
+            
+            # Find and update the item
+            item_found = False
+            for item in items:
+                if item.get('item_id') == item_id:
+                    item_found = True
+                    if quantity is not None:
+                        old_quantity = item.get('quantity', 1)
+                        item['quantity'] = quantity
+                        # Recalculate total price change
+                        unit_price = item.get('unit_price', 0)
+                        price_difference = (quantity - old_quantity) * unit_price
+                    if notes is not None:
+                        item['notes'] = notes
+                    break
+            
+            if not item_found:
+                return jsonify({'success': False, 'error': 'Item not found'}), 404
+            
+            # Update the shopping list with modified items
+            import json
+            from datetime import datetime
+            
+            update_params = {
+                'items': json.dumps(items),
+                'list_id': list_id,
+                'updated_at': datetime.utcnow()
+            }
+            
+            if quantity is not None and 'price_difference' in locals():
+                # Update total price
+                update_query = """UPDATE shopping_lists 
+                                  SET items = :items,
+                                      updated_at = :updated_at,
+                                      total_price = COALESCE(total_price, 0) + :price_difference
+                                  WHERE list_id = :list_id"""
+                update_params['price_difference'] = price_difference
+            else:
+                # Just update items and timestamp
+                update_query = """UPDATE shopping_lists 
+                                  SET items = :items,
+                                      updated_at = :updated_at
+                                  WHERE list_id = :list_id"""
+            
+            success = database_service.execute_update(update_query, update_params)
+            
+            if success:
+                return jsonify({
+                    'success': True,
+                    'data': {
+                        'list_id': list_id,
+                        'item_count': len(items),
+                        'totals': {'item_count': len(items)}  # Simplified
+                    },
+                    'message': 'Item updated successfully'
+                })
+            else:
+                return jsonify({
+                    'success': False,
+                    'error': 'Failed to update item in database'
+                }), 500
+                
+        except Exception as e:
+            logger.error(f"Error updating item {item_id}: {str(e)}")
             return jsonify({
                 'success': False,
-                'error': 'Failed to update item'
+                'error': f'Database error: {str(e)}'
             }), 500
         
     except Exception as e:
@@ -466,38 +637,89 @@ def update_item_in_list(list_id, item_id):
 def remove_item_from_list(list_id, item_id):
     """Remove item from shopping list."""
     try:
-        user_service, shopping_list_service, _, _ = get_services()
-        
-        # Get current user
-        user = user_service.validate_session(session.get('session_id'))
+        # Get current user - use simple database method
+        user_code = session.get('user_code')
+        database_service = current_app.database_service
+        user_data = database_service.get_user_by_code(user_code)
+        from app.models.user import User
+        user = User.from_dict(user_data) if user_data else None
         if not user:
             return jsonify({'success': False, 'error': 'Not authenticated'}), 401
         
-        # Get shopping list
-        shopping_list = shopping_list_service.get_shopping_list(list_id, user)
-        if not shopping_list:
-            return jsonify({'success': False, 'error': 'Shopping list not found'}), 404
-        
-        # Remove item
-        success = shopping_list_service.remove_item_from_list(shopping_list, item_id)
-        
-        if success:
-            # Get updated totals
-            totals = shopping_list_service.calculate_list_totals(shopping_list)
+        # Remove item directly from database JSONB
+        try:
+            # Get the shopping list to find the item
+            shopping_list_data = database_service.execute_query(
+                "SELECT items, total_price FROM shopping_lists WHERE list_id = :list_id AND user_id = :user_id",
+                {'list_id': list_id, 'user_id': user.user_id}
+            )
             
-            return jsonify({
-                'success': True,
-                'data': {
-                    'list_id': shopping_list.list_id,
-                    'item_count': shopping_list.get_item_count(),
-                    'totals': totals
-                },
-                'message': 'Item removed from shopping list'
-            })
-        else:
+            if not shopping_list_data:
+                return jsonify({'success': False, 'error': 'Shopping list not found'}), 404
+            
+            items = shopping_list_data[0]['items']
+            current_total = float(shopping_list_data[0]['total_price'] or 0)
+            
+            if isinstance(items, str):
+                import json
+                items = json.loads(items)
+            
+            # Find and remove the item
+            item_found = False
+            removed_price = 0
+            for i, item in enumerate(items):
+                if item.get('item_id') == item_id:
+                    item_found = True
+                    # Calculate price to subtract
+                    unit_price = item.get('unit_price', 0)
+                    quantity = item.get('quantity', 1)
+                    removed_price = unit_price * quantity
+                    # Remove the item
+                    items.pop(i)
+                    break
+            
+            if not item_found:
+                return jsonify({'success': False, 'error': 'Item not found'}), 404
+            
+            # Update the shopping list with modified items
+            import json
+            from datetime import datetime
+            
+            success = database_service.execute_update(
+                """UPDATE shopping_lists 
+                   SET items = :items,
+                       updated_at = :updated_at,
+                       total_price = GREATEST(COALESCE(total_price, 0) - :removed_price, 0)
+                   WHERE list_id = :list_id""",
+                {
+                    'items': json.dumps(items),
+                    'list_id': list_id,
+                    'updated_at': datetime.utcnow(),
+                    'removed_price': removed_price
+                }
+            )
+            
+            if success:
+                return jsonify({
+                    'success': True,
+                    'data': {
+                        'list_id': list_id,
+                        'item_count': len(items),
+                        'totals': {'item_count': len(items)}  # Simplified
+                    },
+                    'message': 'Item removed from shopping list'
+                })
+            else:
+                return jsonify({
+                    'success': False,
+                    'error': 'Failed to remove item from database'
+                }), 500
+                
+        except Exception as e:
+            logger.error(f"Error removing item {item_id}: {str(e)}")
             return jsonify({
                 'success': False,
-                'error': 'Failed to remove item'
+                'error': f'Database error: {str(e)}'
             }), 500
         
     except Exception as e:
@@ -516,7 +738,9 @@ def generate_html_list(list_id):
         user_service, shopping_list_service, price_calculator, html_generator = get_services()
         
         # Get current user
-        user = user_service.validate_session(session.get('session_id'))
+        user_code = session.get('user_code')
+        user_data = current_app.database_service.get_user_by_code(user_code)
+        user = User.from_dict(user_data) if user_data else None
         if not user:
             return jsonify({'success': False, 'error': 'Not authenticated'}), 401
         
@@ -566,7 +790,9 @@ def update_shopping_list(list_id):
         user_service, shopping_list_service, _, _ = get_services()
         
         # Get current user
-        user = user_service.validate_session(session.get('session_id'))
+        user_code = session.get('user_code')
+        user_data = current_app.database_service.get_user_by_code(user_code)
+        user = User.from_dict(user_data) if user_data else None
         if not user:
             return jsonify({'success': False, 'error': 'Not authenticated'}), 401
         
@@ -621,7 +847,9 @@ def delete_shopping_list(list_id):
         user_service, shopping_list_service, _, _ = get_services()
         
         # Get current user
-        user = user_service.validate_session(session.get('session_id'))
+        user_code = session.get('user_code')
+        user_data = current_app.database_service.get_user_by_code(user_code)
+        user = User.from_dict(user_data) if user_data else None
         if not user:
             return jsonify({'success': False, 'error': 'Not authenticated'}), 401
         
@@ -660,7 +888,9 @@ def duplicate_shopping_list(list_id):
         user_service, shopping_list_service, _, _ = get_services()
         
         # Get current user
-        user = user_service.validate_session(session.get('session_id'))
+        user_code = session.get('user_code')
+        user_data = current_app.database_service.get_user_by_code(user_code)
+        user = User.from_dict(user_data) if user_data else None
         if not user:
             return jsonify({'success': False, 'error': 'Not authenticated'}), 401
         

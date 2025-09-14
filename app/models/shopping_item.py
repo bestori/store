@@ -201,6 +201,63 @@ class ShoppingItem:
         )
     
     @classmethod
+    def from_database_dict(cls, data: Dict[str, Any]) -> 'ShoppingItem':
+        """
+        Create ShoppingItem instance from database JSONB format.
+        
+        Args:
+            data: Dictionary containing database item data
+            
+        Returns:
+            ShoppingItem instance
+        """
+        # Parse datetime field from database format
+        added_at = None
+        if data.get('added_at'):
+            added_at = datetime.fromisoformat(data['added_at'].replace('Z', '+00:00'))
+        
+        # Extract product information
+        product_info = data.get('product', {})
+        descriptions = {
+            'hebrew': product_info.get('hebrew_term', ''),
+            'english': product_info.get('english_term', '')
+        }
+        
+        # Calculate total price
+        unit_price = data.get('unit_price', 0.0)
+        quantity = data.get('quantity', 1)
+        total_price = unit_price * quantity
+        
+        item = cls(
+            item_id=data.get('item_id', ''),
+            menora_id=data.get('menora_id', ''),
+            supplier_code='',  # Not stored in our format
+            descriptions=descriptions,
+            quantity=quantity,
+            unit_price=unit_price,
+            total_price=total_price,
+            notes=data.get('notes'),
+            added_at=added_at,
+            updated_at=added_at  # Use same timestamp
+        )
+        
+        # Add image_url as a dynamic attribute for template compatibility
+        item.image_url = data.get('image_url')
+        
+        # Add product attribute for template compatibility  
+        class ProductInfo:
+            def __init__(self, hebrew_term, english_term):
+                self.hebrew_term = hebrew_term
+                self.english_term = english_term
+        
+        item.product = ProductInfo(
+            hebrew_term=descriptions.get('hebrew', ''),
+            english_term=descriptions.get('english', '')
+        )
+        
+        return item
+    
+    @classmethod
     def from_product(cls, product_data: Dict[str, Any], quantity: int = 1, 
                      notes: Optional[str] = None) -> 'ShoppingItem':
         """

@@ -315,6 +315,63 @@ class ShoppingList:
         )
     
     @classmethod
+    def from_database_dict(cls, data: Dict[str, Any]) -> 'ShoppingList':
+        """
+        Create ShoppingList instance from database row format.
+        
+        Args:
+            data: Dictionary containing database row data
+            
+        Returns:
+            ShoppingList instance
+        """
+        # Parse datetime fields from database format
+        created_at = data.get('created_at')
+        if created_at and hasattr(created_at, 'replace'):
+            # Handle string format
+            created_at = datetime.fromisoformat(str(created_at).replace('Z', '+00:00'))
+        elif hasattr(created_at, 'astimezone'):
+            # Handle datetime objects
+            created_at = created_at.astimezone(timezone.utc)
+        
+        updated_at = data.get('updated_at')
+        if updated_at and hasattr(updated_at, 'replace'):
+            updated_at = datetime.fromisoformat(str(updated_at).replace('Z', '+00:00'))
+        elif hasattr(updated_at, 'astimezone'):
+            updated_at = updated_at.astimezone(timezone.utc)
+        
+        # Parse items from JSONB format
+        items = []
+        if data.get('items'):
+            raw_items = data['items']
+            if isinstance(raw_items, str):
+                import json
+                raw_items = json.loads(raw_items)
+            
+            for item_data in raw_items:
+                # Convert raw item data to ShoppingItem
+                shopping_item = ShoppingItem.from_database_dict(item_data)
+                items.append(shopping_item)
+        
+        # Get user_code from user_id if needed (user_XXXX -> XXXX)
+        user_code = data.get('user_code', '')
+        if not user_code and data.get('user_id'):
+            user_code = data['user_id'].replace('user_', '')
+        
+        return cls(
+            list_id=data.get('list_id', ''),
+            user_id=data.get('user_id', ''),
+            user_code=user_code,
+            list_name=data.get('name', ''),  # Database uses 'name' not 'list_name'
+            description=data.get('description'),
+            items=items,
+            status=data.get('status', 'active'),
+            created_at=created_at,
+            updated_at=updated_at,
+            version=1
+        )
+
+    @classmethod
     def create_new_list(cls, user_id: str, user_code: str, 
                        list_name: str, description: Optional[str] = None) -> 'ShoppingList':
         """

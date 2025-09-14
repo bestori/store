@@ -357,7 +357,7 @@
                         
                         // Redirect to shopping list after 1 second
                         setTimeout(() => {
-                            window.location.href = '/shopping-list';
+                            window.location.href = data.redirect_url || '/shopping-list';
                         }, 1000);
                     } else {
                         console.error('Add to cart failed:', data);

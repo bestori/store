@@ -157,7 +157,9 @@ def profile():
         shopping_list_service = ShoppingListService(database_service)
         statistics_service = UserStatisticsService(database_service)
         
-        user = user_service.validate_session(session.get('session_id'))
+        user_code = session.get('user_code')
+        user_data = current_app.database_service.get_user_by_code(user_code)
+        user = User.from_dict(user_data) if user_data else None
         
         if not user:
             session.clear()
@@ -188,7 +190,9 @@ def update_profile():
             return jsonify({'success': False, 'error': 'Not authenticated'}), 401
         
         user_service = get_user_service()
-        user = user_service.validate_session(session.get('session_id'))
+        user_code = session.get('user_code')
+        user_data = current_app.database_service.get_user_by_code(user_code)
+        user = User.from_dict(user_data) if user_data else None
         
         if not user:
             session.clear()
@@ -253,7 +257,9 @@ def login_required(f):
         # For web requests, do full validation
         try:
             user_service = get_user_service()
-            user = user_service.validate_session(session.get('session_id'))
+            user_code = session.get('user_code')
+            user_data = current_app.database_service.get_user_by_code(user_code)
+            user = User.from_dict(user_data) if user_data else None
             
             if not user:
                 session.clear()
