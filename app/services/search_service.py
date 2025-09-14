@@ -21,13 +21,14 @@ class SearchService:
     Provides text search, filtered search, and search suggestions.
     """
     
-    def __init__(self, excel_data: Dict[str, Any], product_service=None):
+    def __init__(self, excel_data: Dict[str, Any], product_service=None, database_service=None):
         """
-        Initialize search service with Excel data and optional ProductService.
+        Initialize search service with Excel data and optional services.
         
         Args:
             excel_data: Dictionary containing loaded products and metadata
             product_service: Optional ProductService for Firestore queries
+            database_service: Optional DatabaseService for PostgreSQL queries
         """
         self.logger = logging.getLogger(__name__)
         
@@ -35,6 +36,20 @@ class SearchService:
         self.products: List[Product] = excel_data.get('products', [])
         self.filter_options: Dict[str, List[Any]] = excel_data.get('filter_options', {})
         self.product_service = product_service
+        self.database_service = database_service
+        
+        # If we have database service but no products, load from database
+        if self.database_service and len(self.products) == 0:
+            self.logger.info("Loading products from database for search")
+            try:
+                db_products = self.database_service.get_all_products()
+                self.logger.info(f"Loaded {len(db_products)} products from database")
+                # Convert database products to Product objects for search
+                # For now just store raw data
+                self.db_products = db_products
+            except Exception as e:
+                self.logger.error(f"Failed to load products from database: {e}")
+                self.db_products = []
         
         # Hebrew type translations (from actual Excel data)
         self.type_translations = {
@@ -48,6 +63,58 @@ class SearchService:
         
         # Use ProductService if available, otherwise use cached products
         products_source = "ProductService" if self.product_service else "cached products"
+    
+    def text_search(self, query: str, language: Optional[str] = None,
+                    limit: int = 20, offset: int = 0) -> SearchResult:
+        """
+        Perform text search on product names and descriptions.
+        """
+        start_time = time.time()
+        
+        # If we have database service, search directly in database
+        if self.database_service:
+            try:
+                db_results = self.database_service.search_products(query, limit=limit + offset)
+                # Apply offset manually
+                paginated_results = db_results[offset:offset + limit] if len(db_results) > offset else []
+                
+                execution_time = time.time() - start_time
+                
+                # Convert to SearchResult format
+                from app.models.search_result import SearchResult
+                result = SearchResult(
+                    products=paginated_results,
+                    query=query,
+                    total_results=len(db_results),
+                    results_shown=len(paginated_results),
+                    execution_time=execution_time,
+                    page_number=offset // limit + 1 if limit > 0 else 1,
+                    total_pages=(len(db_results) + limit - 1) // limit if limit > 0 else 1,
+                    filters={},
+                    available_filters={}
+                )
+                
+                self.logger.info(f"Database search '{query}': {len(db_results)} results in {execution_time:.3f}s")
+                return result
+                
+            except Exception as e:
+                self.logger.error(f"Database search failed: {e}")
+                # Fall through to empty result
+        
+        # Fallback: return empty result
+        execution_time = time.time() - start_time
+        from app.models.search_result import SearchResult
+        return SearchResult(
+            products=[],
+            query=query,
+            total_results=0,
+            results_shown=0,
+            execution_time=execution_time,
+            page_number=1,
+            total_pages=0,
+            filters={},
+            available_filters={}
+        )
         product_count = len(self.products)
         if self.product_service:
             try:
